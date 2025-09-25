@@ -1,0 +1,1 @@
+# poc-task-manager-herooffer-ghc
