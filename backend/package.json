@@ -6,22 +6,21 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "cross-env NODE_ENV=test jest --coverage --verbose",
-    "test:watch": "cross-env NODE_ENV=test jest --watch --coverage",
+    "test": "cross-env NODE_ENV=test jest --config=jest.config.unit.js --coverage --runInBand --verbose",
+    "test:watch": "cross-env NODE_ENV=test jest --config=jest.config.unit.js --watch --coverage",
     "test:unit": "cross-env NODE_ENV=test jest --config=jest.config.unit.js",
-    "test:unit-db": "cross-env NODE_ENV=test jest --testPathPattern=unit --coverage",
-    "test:integration": "cross-env NODE_ENV=test jest --testPathPattern=integration --coverage"
+    "test:integration": "cross-env NODE_ENV=test jest --config=jest.config.integration.js --runInBand"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "mongoose": "^7.8.7"
+    "mongoose": "^7.8.7",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^2.0.22",
-  "supertest": "^6.3.3",
-  "dotenv": "^16.4.5",
+    "supertest": "^6.3.3",
     "@types/jest": "^29.5.12",
     "mongodb-memory-server": "^9.1.6",
     "jest-environment-node": "^29.7.0",
