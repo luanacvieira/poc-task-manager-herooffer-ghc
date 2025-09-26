@@ -34,16 +34,23 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Debug list coverage files
+        if: always()
+        run: |
+          echo "Current directory:" && pwd
+          echo "List root (backend working dir):" && ls -al
+          echo "List coverage-unit directory:" && ls -al coverage-unit || echo "coverage-unit directory not found"
+
       - name: Enforce backend coverage >= 80%
         run: |
-          node -e "const fs=require('fs');const p='backend/coverage-unit/coverage-summary.json';if(!fs.existsSync(p)){console.error('coverage summary not found');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Backend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK >= '+req+'% for all metrics.');"
+          node -e "const fs=require('fs');const p='coverage-unit/coverage-summary.json';if(!fs.existsSync(p)){console.error('backend coverage summary not found at '+p);process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Backend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK >= '+req+'% for all metrics.');"
 
       - name: Upload backend coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: backend/coverage/**
+          path: backend/coverage-unit/**
 
   frontend:
     name: Frontend Tests & Coverage
@@ -72,7 +79,7 @@ jobs:
 
       - name: Enforce frontend coverage >= 80%
         run: |
-          node -e "const fs=require('fs');const p='frontend/coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('coverage summary not found');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
+          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('frontend coverage summary not found at '+p);process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
 
       - name: Upload frontend coverage report
         if: always()
