@@ -77,9 +77,16 @@ jobs:
         run: |
           CI=true npm test -- --coverage --watchAll=false --runInBand
 
+      - name: Debug list frontend coverage files
+        if: always()
+        run: |
+          echo "Current directory:" && pwd
+          echo "List root (frontend working dir):" && ls -al
+          echo "List coverage directory:" && ls -al coverage || echo "coverage directory not found"
+
       - name: Enforce frontend coverage >= 80%
         run: |
-          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('frontend coverage summary not found at '+p);process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
+          node -e "const fs=require('fs');const summaryPath='coverage/coverage-summary.json';if(!fs.existsSync(summaryPath)){const finalPath='coverage/coverage-final.json';if(!fs.existsSync(finalPath)){console.error('No coverage summary or final file found');process.exit(1);}const final=JSON.parse(fs.readFileSync(finalPath));const agg={lines:{covered:0,total:0},statements:{covered:0,total:0},functions:{covered:0,total:0},branches:{covered:0,total:0}};for(const file of Object.values(final)){if(file.l){agg.lines.total+=Object.keys(file.l).length;agg.lines.covered+=Object.values(file.l).filter(h=>h>0).length;}if(file.s){agg.statements.total+=Object.keys(file.s).length;agg.statements.covered+=Object.values(file.s).filter(h=>h>0).length;}if(file.f){agg.functions.total+=Object.keys(file.f).length;agg.functions.covered+=Object.values(file.f).filter(h=>h>0).length;}if(file.b){for(const arr of Object.values(file.b)){agg.branches.total+=arr.length;agg.branches.covered+=arr.filter(h=>h>0).length;}}}const total={};for(const k in agg){const {covered,total:t}=agg[k];total[k]={total:t,covered,pct:t?Number((covered/t*100).toFixed(2)):0};}fs.writeFileSync(summaryPath,JSON.stringify({total},null,2));console.log('Synthesized coverage-summary.json from coverage-final.json');}const p=summaryPath;const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
 
       - name: Upload frontend coverage report
         if: always()
