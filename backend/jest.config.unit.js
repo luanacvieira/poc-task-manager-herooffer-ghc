@@ -23,14 +23,8 @@ module.exports = {
     ],
     
     // Thresholds de cobertura mais realistas para testes isolados
-    coverageThreshold: {
-        global: {
-            branches: 70,
-            functions: 80,
-            lines: 80,
-            statements: 80
-        }
-    },
+    // Removido coverageThreshold: enforcement será feito somente via GitHub Actions
+    coverageReporters: ['text', 'lcov', 'html', 'json', 'json-summary'],
     
     // Timeout aumentado
     testTimeout: 10000,

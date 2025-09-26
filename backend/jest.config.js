@@ -15,7 +15,8 @@ module.exports = {
         'text',
         'lcov', 
         'html',
-        'json-summary'
+        'json-summary',
+        'json'
     ],
     
     // Arquivos para incluir na cobertura
@@ -27,14 +28,7 @@ module.exports = {
     ],
     
     // Limite mínimo de cobertura (ajustado para ser realístico)
-    coverageThreshold: {
-        global: {
-            branches: 80,
-            functions: 85,
-            lines: 85,
-            statements: 85
-        }
-    },
+    // coverageThreshold removido: enforcement via GitHub Actions workflow
     
     // Setup e teardown (usar ambiente leve sem MongoDB real para evitar flakiness)
     setupFilesAfterEnv: ['<rootDir>/tests/setup-unit.js'],
