@@ -5,17 +5,22 @@ const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
 
+// CORS middleware DEVE vir ANTES das rotas
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
 // Middleware
 app.use(express.json());
 app.use('/api', taskRoutes);
-
-// Simple CORS middleware
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    next();
-});
 
 mongoose.connect('mongodb://localhost:27017/taskdb', {
     useNewUrlParser: true,
@@ -27,6 +32,7 @@ mongoose.connect('mongodb://localhost:27017/taskdb', {
         console.log('Available routes:');
         console.log('  GET /api/tasks');
         console.log('  POST /api/tasks');
+        console.log('  PUT /api/tasks/:id');
         console.log('  DELETE /api/tasks/:id');
     });
     
