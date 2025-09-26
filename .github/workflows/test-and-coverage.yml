@@ -34,6 +34,10 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Enforce backend coverage >= 80%
+        run: |
+          node -e "const fs=require('fs');const p='backend/coverage-unit/coverage-summary.json';if(!fs.existsSync(p)){console.error('coverage summary not found');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Backend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK >= '+req+'% for all metrics.');"
+
       - name: Upload backend coverage report
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,7 +68,11 @@ jobs:
       - name: Run frontend tests with coverage & thresholds
         # CRA passa args ao jest após '--'
         run: |
-          CI=true npm test -- --coverage --watchAll=false --runInBand --coverageThreshold='{"global":{"branches":70,"functions":80,"lines":80,"statements":80}}'
+          CI=true npm test -- --coverage --watchAll=false --runInBand
+
+      - name: Enforce frontend coverage >= 80%
+        run: |
+          node -e "const fs=require('fs');const p='frontend/coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('coverage summary not found');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
 
       - name: Upload frontend coverage report
         if: always()
