@@ -1,0 +1,89 @@
+name: Test and Coverage Check
+
+on:
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  backend:
+    name: Backend Tests & Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run backend unit tests (with coverage & thresholds)
+        run: npm test -- --ci --runInBand
+        env:
+          NODE_ENV: test
+
+      - name: Upload backend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/**
+
+  frontend:
+    name: Frontend Tests & Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run frontend tests with coverage & thresholds
+        # CRA passa args ao jest após '--'
+        run: |
+          CI=true npm test -- --coverage --watchAll=false --runInBand --coverageThreshold='{"global":{"branches":70,"functions":80,"lines":80,"statements":80}}'
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/**
+
+  summary:
+    name: Summary (gate)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: always()
+    steps:
+      - name: Mark workflow status
+        run: |
+          if [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "One or more jobs failed (backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }})" >&2
+            exit 1
+          else
+            echo "All test jobs succeeded."
+          fi

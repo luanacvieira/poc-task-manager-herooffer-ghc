@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import axios from 'axios';
+import { createTask } from '../services/api';
 
 interface TaskFormProps {
     onTaskAdded: () => void;
@@ -15,12 +15,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
         category: 'other',
         tags: ''
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
         if (!formData.title.trim()) return;
 
         try {
+            setIsSubmitting(true);
             const taskData = {
                 ...formData,
                 tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
@@ -30,7 +33,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
                 userId: 'user1'
             };
 
-            await axios.post('/api/tasks', taskData);
+            await createTask(taskData);
             
             // Limpar formulário
             setFormData({
@@ -47,6 +50,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
         } catch (error) {
             console.error('Erro ao criar task:', error);
             alert('Erro ao criar tarefa!');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -65,9 +70,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
                         value={formData.title}
                         onChange={handleInputChange}
                         placeholder="Título da tarefa *"
+                        aria-label="Título"
                         required
                     />
-                    <select name="priority" value={formData.priority} onChange={handleInputChange}>
+                    <select name="priority" value={formData.priority} onChange={handleInputChange} aria-label="Prioridade">
                         <option value="low">🟢 Baixa</option>
                         <option value="medium">🟡 Média</option>
                         <option value="high">🟠 Alta</option>
@@ -80,6 +86,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
                     value={formData.description}
                     onChange={handleInputChange}
                     placeholder="Descrição (opcional)"
+                    aria-label="Descrição"
                     rows={2}
                 />
 
@@ -89,8 +96,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
                         type="date"
                         value={formData.dueDate}
                         onChange={handleInputChange}
+                        aria-label="Data Limite"
                     />
-                    <select name="category" value={formData.category} onChange={handleInputChange}>
+                    <select name="category" value={formData.category} onChange={handleInputChange} aria-label="Categoria">
                         <option value="work">💼 Trabalho</option>
                         <option value="personal">🏠 Pessoal</option>
                         <option value="study">📚 Estudos</option>
@@ -104,10 +112,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
                     value={formData.tags}
                     onChange={handleInputChange}
                     placeholder="Tags (separadas por vírgula: projeto, urgente, revisão)"
+                    aria-label="Tags"
                 />
 
-                <button type="submit" className="btn-add">
-                    ➕ Adicionar Tarefa
+                <button type="submit" className="btn-add" disabled={isSubmitting}>
+                    {isSubmitting ? 'Salvando...' : '➕ Adicionar Tarefa'}
                 </button>
             </form>
         </div>
