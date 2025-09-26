@@ -85,9 +85,9 @@ jobs:
           echo "List root (frontend working dir):" && ls -al
           echo "List coverage directory:" && ls -al coverage || echo "coverage directory not found"
 
-      - name: Enforce frontend coverage >= 100% (TEMPORARY FAIL TEST)
+      - name: Enforce frontend coverage >= 80%
         run: |
-          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('frontend coverage summary not found (expected json-summary reporter).');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;console.log('Frontend coverage summary:',s);const req=100;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('[INTENTIONAL TEST] Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics (unexpected for this temp test).');"
+          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('frontend coverage summary not found (expected json-summary reporter).');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;console.log('Frontend coverage summary:',s);const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
 
       - name: Upload frontend coverage report
         if: always()
