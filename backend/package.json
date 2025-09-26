@@ -1,0 +1,28 @@
+{
+  "name": "task-manager-backend",
+  "version": "1.0.0",
+  "description": "Backend for Task Manager application",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mongoose": "^7.8.7"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^2.0.22",
+    "supertest": "^6.3.3"
+  },
+  "keywords": [
+    "task",
+    "manager",
+    "api"
+  ],
+  "author": "Luana Vieira",
+  "license": "ISC"
+}
