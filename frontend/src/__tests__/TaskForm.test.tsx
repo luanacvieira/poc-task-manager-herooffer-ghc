@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import TaskForm from '../components/TaskForm';
 import * as api from '../services/api';
+import { CreateTaskPayload } from '../services/api';
 
 jest.mock('../services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
@@ -14,7 +15,7 @@ describe('TaskForm Component Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // Mock successful API response
-    mockedApi.createTask.mockResolvedValue({ data: {} } as any);
+    mockedApi.createTask.mockResolvedValue({ data: {} } as unknown as { data: CreateTaskPayload });
     });
 
     test('should render form elements correctly', () => {
