@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getTasks, createTask, deleteTask } from '../services/api';
+import { getTasks, createTask, deleteTask, CreateTaskPayload, Task } from '../services/api';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -30,13 +30,18 @@ describe('API Service Tests', () => {
 
     describe('createTask', () => {
         test('should call axios.post with correct endpoint and data', async () => {
-            const taskData = {
+            const taskData: CreateTaskPayload = {
                 title: 'New Task',
                 description: 'Task description',
                 priority: 'high',
-                completed: false
+                dueDate: null,
+                category: 'work',
+                tags: ['tag1'],
+                completed: false,
+                assignedTo: 'user1',
+                userId: 'user1'
             };
-            const mockResponse = { data: { _id: '123', ...taskData } };
+            const mockResponse = { data: { _id: '123', ...taskData } as Task };
             mockedAxios.post.mockResolvedValueOnce(mockResponse);
 
             const result = await createTask(taskData);
@@ -46,7 +51,7 @@ describe('API Service Tests', () => {
         });
 
         test('should handle validation errors when creating task', async () => {
-            const taskData = { title: '' }; // Invalid data
+            const taskData = { title: '' } as unknown as CreateTaskPayload; // Invalid data coerced
             const mockError = { 
                 response: { 
                     status: 400, 
@@ -60,7 +65,17 @@ describe('API Service Tests', () => {
         });
 
         test('should handle server errors when creating task', async () => {
-            const taskData = { title: 'Valid Task' };
+            const taskData = {
+                title: 'Valid Task',
+                description: 'Desc',
+                priority: 'medium',
+                dueDate: null,
+                category: 'other',
+                tags: [],
+                completed: false,
+                assignedTo: 'user1',
+                userId: 'user1'
+            } as CreateTaskPayload;
             const mockError = { 
                 response: { 
                     status: 500, 
@@ -137,7 +152,7 @@ describe('API Service Tests', () => {
             mockedAxios.delete.mockRejectedValueOnce(timeoutError);
 
             await expect(getTasks()).rejects.toEqual(timeoutError);
-            await expect(createTask({})).rejects.toEqual(timeoutError);
+            await expect(createTask({} as unknown as CreateTaskPayload)).rejects.toEqual(timeoutError);
             await expect(deleteTask('123')).rejects.toEqual(timeoutError);
         });
 
@@ -165,7 +180,7 @@ describe('API Service Tests', () => {
             mockedAxios.delete.mockRejectedValueOnce(authError);
 
             await expect(getTasks()).rejects.toEqual(authError);
-            await expect(createTask({})).rejects.toEqual(authError);
+            await expect(createTask({} as unknown as CreateTaskPayload)).rejects.toEqual(authError);
             await expect(deleteTask('123')).rejects.toEqual(authError);
         });
     });

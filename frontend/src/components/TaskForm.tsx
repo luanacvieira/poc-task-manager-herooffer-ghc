@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { createTask } from '../services/api';
+import { createTask, CreateTaskPayload } from '../services/api';
 
 interface TaskFormProps {
     onTaskAdded: () => void;
@@ -10,7 +10,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
         dueDate: '',
         category: 'other',
         tags: ''
@@ -24,10 +24,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
 
         try {
             setIsSubmitting(true);
-            const taskData = {
-                ...formData,
-                tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+            const taskData: CreateTaskPayload = {
+                title: formData.title,
+                description: formData.description,
+                priority: formData.priority,
                 dueDate: formData.dueDate || null,
+                category: formData.category,
+                tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
                 completed: false,
                 assignedTo: 'user1',
                 userId: 'user1'
