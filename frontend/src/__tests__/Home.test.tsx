@@ -4,8 +4,13 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Home from '../pages/Home';
 import axios from 'axios';
-// Evitar sintaxe de asserção TS que não está sendo transpila corretamente pelo setup atual
-const mockedAxios: any = axios;
+import { Task } from '../services/api';
+// Tipagem segura para axios mockado
+const mockedAxios = axios as unknown as {
+    get: jest.Mock<Promise<{ data: Task[] }>, any>;
+    put: jest.Mock<Promise<{ data: Partial<Task> }>, any>;
+    delete: jest.Mock<Promise<{ data: unknown }>, any>;
+};
 
 // Mock do TaskForm component
 jest.mock('../components/TaskForm', () => {
@@ -18,7 +23,7 @@ jest.mock('../components/TaskForm', () => {
     };
 });
 
-const mockTasks = [
+const mockTasks: Task[] = [
     {
         _id: '1',
         title: 'Task 1',

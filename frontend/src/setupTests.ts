@@ -23,7 +23,7 @@ const originalError = console.error;
 const originalWarn = console.warn;
 
 beforeAll(() => {
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
         if (
             typeof args[0] === 'string' &&
             (args[0].includes('Warning: ReactDOM.render is deprecated') ||
@@ -38,7 +38,7 @@ beforeAll(() => {
         originalError.call(console, ...args);
     };
 
-    console.warn = (...args: any[]) => {
+    console.warn = (...args: unknown[]) => {
         if (
             typeof args[0] === 'string' &&
             args[0].includes('componentWillReceiveProps has been renamed')
