@@ -18,7 +18,9 @@ afterAll(async () => {
 afterEach(async () => {
   const collections = mongoose.connection.collections;
   for (const key of Object.keys(collections)) {
-    await collections[key].deleteMany({});
+    if (Object.prototype.hasOwnProperty.call(collections, key)) {
+      await collections[key].deleteMany({});
+    }
   }
 });
 

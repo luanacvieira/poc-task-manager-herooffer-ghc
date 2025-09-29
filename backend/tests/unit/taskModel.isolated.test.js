@@ -12,15 +12,7 @@ jest.mock('mongoose', () => ({
     model: jest.fn(),
 }));
 
-// Mock do Task model
-const mockTask = {
-    // Constructor mock
-    constructor: jest.fn(),
-    // Methods mock
-    save: jest.fn(),
-    validate: jest.fn(),
-    validateSync: jest.fn(),
-};
+// (Removido: mockTask não utilizado)
 
 // Mock data para testes
 const validTaskData = {
