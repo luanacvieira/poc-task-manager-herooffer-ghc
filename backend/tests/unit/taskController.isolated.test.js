@@ -15,13 +15,7 @@ const mockTask = {
 // Mock do módulo Task
 jest.mock('../../src/models/taskModel', () => mockTask);
 
-// Mock das funções do controller para evitar execução real
-const mockController = {
-    getTasks: jest.fn(),
-    createTask: jest.fn(),
-    updateTask: jest.fn(),
-    deleteTask: jest.fn()
-};
+// (Removido: mockController não utilizado)
 
 // Mock data para testes
 const mockTaskData = {
