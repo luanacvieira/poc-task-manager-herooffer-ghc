@@ -16,7 +16,7 @@ describe('TaskForm Component Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // Mock successful API response
-    const mockResponse: AxiosResponse<Task> = {
+    const mockResponse = {
         data: {
             _id: '1',
             title: 'Test Task',
@@ -27,12 +27,8 @@ describe('TaskForm Component Tests', () => {
             category: 'other',
             tags: [],
             assignedTo: 'user1'
-        },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {}
-    };
+        }
+    } as unknown as AxiosResponse<Task>;
     mockedApi.createTask.mockResolvedValue(mockResponse);
     });
 
