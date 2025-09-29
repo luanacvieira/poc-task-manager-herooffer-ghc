@@ -2,9 +2,11 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: ['**']        # ou simplesmente remover 'branches:' para default (todas)
   pull_request:
-    branches: [main, master, develop]
+    branches: ['**']
+  schedule:
+    - cron: '0 3 * * 1'     # (opcional) scan semanal
 
 permissions:
   contents: read
