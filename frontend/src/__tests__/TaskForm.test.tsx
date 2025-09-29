@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import TaskForm from '../components/TaskForm';
 import * as api from '../services/api';
-import { CreateTaskPayload, Task } from '../services/api';
+import { Task } from '../services/api';
+import type { AxiosResponse } from 'axios';
 
 jest.mock('../services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
@@ -15,7 +16,7 @@ describe('TaskForm Component Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // Mock successful API response
-    mockedApi.createTask.mockResolvedValue({
+    const mockResponse: AxiosResponse<Task> = {
         data: {
             _id: '1',
             title: 'Test Task',
@@ -26,12 +27,13 @@ describe('TaskForm Component Tests', () => {
             category: 'other',
             tags: [],
             assignedTo: 'user1'
-        } as Task,
+        },
         status: 200,
         statusText: 'OK',
         headers: {},
         config: {}
-    } as any);
+    };
+    mockedApi.createTask.mockResolvedValue(mockResponse);
     });
 
     test('should render form elements correctly', () => {
