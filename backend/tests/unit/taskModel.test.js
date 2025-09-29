@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const Task = require('../../src/models/taskModel');
 
 describe('Task Model Unit Tests', () => {
