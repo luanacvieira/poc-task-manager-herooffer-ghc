@@ -7,9 +7,9 @@ import axios from 'axios';
 import { Task } from '../services/api';
 // Tipagem segura para axios mockado
 const mockedAxios = axios as unknown as {
-    get: jest.Mock<Promise<{ data: Task[] }>, any>;
-    put: jest.Mock<Promise<{ data: Partial<Task> }>, any>;
-    delete: jest.Mock<Promise<{ data: unknown }>, any>;
+    get: jest.Mock<Promise<{ data: Task[] }>, unknown[]>;
+    put: jest.Mock<Promise<{ data: Partial<Task> }>, unknown[]>;
+    delete: jest.Mock<Promise<{ data: unknown }>, unknown[]>;
 };
 
 // Mock do TaskForm component
