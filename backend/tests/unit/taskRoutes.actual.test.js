@@ -1,6 +1,9 @@
 const request = require('supertest');
 const express = require('express');
 
+// Mock do rate limiter para não interferir nos testes / não exigir dependência real em unit
+jest.mock('express-rate-limit', () => () => (req, res, next) => next());
+
 // Mock dos controllers antes de importar as rotas
 jest.mock('../../src/controllers/taskController', () => ({
     getTasks: jest.fn((req, res) => res.status(200).json([])),
@@ -37,14 +40,27 @@ describe('Task Routes mapping', () => {
     });
 
     test('PUT /api/tasks/:id chama updateTask', async () => {
-        await request(app).put('/api/tasks/123').send({ done: true }).expect(200);
+        const validId = '507f1f77bcf86cd799439011';
+        await request(app).put(`/api/tasks/${validId}`).send({ done: true }).expect(200);
         expect(taskController.updateTask).toHaveBeenCalledTimes(1);
-        expect(taskController.updateTask.mock.calls[0][0].params.id).toBe('123');
+        expect(taskController.updateTask.mock.calls[0][0].params.id).toBe(validId);
     });
 
     test('DELETE /api/tasks/:id chama deleteTask', async () => {
-        await request(app).delete('/api/tasks/abc').expect(204);
+        const validId = '507f1f77bcf86cd799439012';
+        await request(app).delete(`/api/tasks/${validId}`).expect(204);
         expect(taskController.deleteTask).toHaveBeenCalledTimes(1);
-        expect(taskController.deleteTask.mock.calls[0][0].params.id).toBe('abc');
+        expect(taskController.deleteTask.mock.calls[0][0].params.id).toBe(validId);
+    });
+
+    test('PUT /api/tasks/:id id inválido ainda passa (controller mockado) - validação real é no controller não neste teste', async () => {
+        await request(app).put('/api/tasks/short').send({ done: true }).expect(200);
+        // mapping garante chamada independente da validade do id pois estamos mockando controller
+        expect(taskController.updateTask).toHaveBeenCalled();
+    });
+
+    test('DELETE /api/tasks/:id id inválido mapping', async () => {
+        await request(app).delete('/api/tasks/xyz').expect(204);
+        expect(taskController.deleteTask).toHaveBeenCalled();
     });
 });
