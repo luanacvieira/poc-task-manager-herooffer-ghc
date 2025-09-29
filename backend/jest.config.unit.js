@@ -11,7 +11,7 @@ module.exports = {
     // Configuração de cobertura
     collectCoverage: true,
     coverageDirectory: 'coverage-unit',
-    coverageReporters: ['text', 'lcov', 'html', 'json'],
+    coverageReporters: ['text', 'lcov', 'html', 'json', 'json-summary'],
     
     // Arquivos para incluir na cobertura
     collectCoverageFrom: [
@@ -22,9 +22,7 @@ module.exports = {
         '!**/tests/**'
     ],
     
-    // Thresholds de cobertura mais realistas para testes isolados
-    // Removido coverageThreshold: enforcement será feito somente via GitHub Actions
-    coverageReporters: ['text', 'lcov', 'html', 'json', 'json-summary'],
+    // Thresholds removidos: enforcement via GitHub Actions
     
     // Timeout aumentado
     testTimeout: 10000,
