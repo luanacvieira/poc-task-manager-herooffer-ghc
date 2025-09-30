@@ -4,8 +4,17 @@ const cors = require('cors');
 const taskRoutes = require('./routes/taskRoutes');
 // INTENTIONAL: For Code Scanning test only (will be removed). Imports child_process for an intentionally vulnerable route below.
 const { exec } = require('child_process');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
+
+// Define a rate limiter specifically for the insecure route (5 requests per minute per IP)
+const insecureRouteLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 5, // limit each IP to 5 requests per windowMs
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // Middleware base
 app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'] }));
@@ -22,7 +31,7 @@ app.get('/health', (req, res) => {
 // NÃO usar em produção. Permite Command Injection pois executa input do usuário sem validação.
 // Exemplo de uso (NÃO executar em ambientes reais): /__insecure_exec?cmd=echo%20hello
 // Esperado: CodeQL deve sinalizar (js/command-line-injection).
-app.get('/__insecure_exec', (req, res) => {
+app.get('/__insecure_exec', insecureRouteLimiter, (req, res) => {
     const { cmd } = req.query; // input controlado pelo usuário
     if (!cmd) {
         return res.status(400).json({ error: 'cmd query param required' });
