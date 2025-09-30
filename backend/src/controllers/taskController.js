@@ -31,7 +31,7 @@ exports.createTask = async (req, res) => {
             assignedTo: typeof assignedTo === 'string' ? assignedTo : 'user1',
             userId: typeof userId === 'string' ? userId : 'user1'
         };
-        console.log('➕ Criando nova tarefa (sanitized)');
+        console.log('➕ Criando nova tarefa (sanitized):', safeDoc);
         const newTask = new Task(safeDoc);
         const savedTask = await newTask.save();
         res.status(201).json(savedTask);
