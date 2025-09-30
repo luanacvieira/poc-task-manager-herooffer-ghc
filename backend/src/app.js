@@ -1,16 +1,20 @@
-
+// Express app puro (sem side-effects de conexão) para facilitar testes unitários.
 const express = require('express');
-const mongoose = require('mongoose');
+const cors = require('cors');
 const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
+
+// Middleware base
+app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'] }));
 app.use(express.json());
 app.use('/api', taskRoutes);
 
-mongoose.connect('mongodb://localhost:27017/taskdb', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('Connected to MongoDB');
-    app.listen(3001, () => console.log('Server running on port 3001'));
-}).catch(err => console.error(err));
+// Rota de saúde simples
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+// (Rota insegura de teste removida após validação do Code Scanning)
+
+module.exports = app;
