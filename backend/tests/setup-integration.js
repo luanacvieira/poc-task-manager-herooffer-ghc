@@ -16,12 +16,10 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
-  const collections = mongoose.connection.collections;
-  // Iteração segura sobre collections (eslint security/detect-object-injection mitigado
-  // pois o acesso é controlado e as chaves são provenientes de Object.keys)
-  for (const key of Object.keys(collections)) {
-    if (Object.prototype.hasOwnProperty.call(collections, key)) {
-      await collections[key].deleteMany({});
+  const collections = Object.values(mongoose.connection.collections);
+  for (const col of collections) {
+    if (col && typeof col.deleteMany === 'function') {
+      await col.deleteMany({});
     }
   }
 });
