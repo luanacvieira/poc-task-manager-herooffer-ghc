@@ -27,12 +27,27 @@ app.get('/health', (req, res) => {
 });
 
 // ===================== INSECURE TEST ROUTE (INTENTIONAL) =====================
-// Esta rota é intencionalmente vulnerável para acionar Code Scanning (CodeQL).
-// NÃO usar em produção. Permite Command Injection pois executa input do usuário sem validação.
-// Exemplo de uso (NÃO executar em ambientes reais): /__insecure_exec?cmd=echo%20hello
-// Esperado: CodeQL deve sinalizar (js/command-line-injection).
-app.get('/__insecure_exec', insecureRouteLimiter, (req, res) => {
-    const { cmd } = req.query; // input controlado pelo usuário
+    // Secure: Only allow a whitelist of safe commands, and use spawn to avoid shell injection
+    const allowedCommands = {
+        'echo': true,
+        'date': true,
+        'uptime': true
+    };
+    // Split cmd into command and args
+    const parts = cmd.split(' ');
+    const command = parts[0];
+    const args = parts.slice(1);
+    if (!allowedCommands[command]) {
+        return res.status(400).json({ error: 'Command not allowed' });
+    }
+    const { spawn } = require('child_process');
+    const child = spawn(command, args);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data) => { stdout += data; });
+    child.stderr.on('data', (data) => { stderr += data; });
+    child.on('close', (code) => {
+        res.json({ stdout, stderr, code });
     if (!cmd) {
         return res.status(400).json({ error: 'cmd query param required' });
     }
