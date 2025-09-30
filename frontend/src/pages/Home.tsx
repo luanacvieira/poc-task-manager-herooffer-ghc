@@ -3,18 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import TaskForm from '../components/TaskForm';
 
-interface Task {
-    _id: string;
-    title: string;
-    description: string;
-    completed: boolean;
-    priority: 'low' | 'medium' | 'high' | 'urgent';
-    dueDate?: string;
-    category: string;
-    tags: string[];
-    createdAt: string;
-    assignedTo: string;
-}
+import { Task } from '../services/api';
 
 const Home = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
