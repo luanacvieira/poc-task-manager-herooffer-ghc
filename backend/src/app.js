@@ -16,5 +16,6 @@ app.get('/health', (req, res) => {
 });
 
 // (Rota insegura de teste removida após validação do Code Scanning)
+// CI trigger: comentário adicionado para verificar execução completa dos workflows agora que a base contém o YAML.
 
 module.exports = app;
