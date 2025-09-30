@@ -47,14 +47,15 @@ exports.updateTask = async (req, res) => {
         if (!id || !id.match(/^[a-fA-F0-9]{24}$/)) {
             return res.status(400).json({ error: 'Invalid task id' });
         }
-        // Apenas campos permitidos
-        const allowed = ['title','description','priority','dueDate','category','tags','completed'];
+        // Apenas campos permitidos (explicito para evitar dynamic property warnings de segurança)
         const update = {};
-        for (const key of allowed) {
-            if (Object.prototype.hasOwnProperty.call(req.body, key)) {
-                update[key] = req.body[key];
-            }
-        }
+        if (Object.prototype.hasOwnProperty.call(req.body, 'title')) update.title = req.body.title;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'description')) update.description = req.body.description;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'priority')) update.priority = req.body.priority;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'dueDate')) update.dueDate = req.body.dueDate;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'category')) update.category = req.body.category;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'tags')) update.tags = req.body.tags;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'completed')) update.completed = req.body.completed;
         console.log('📝 Atualizando tarefa (safe fields):', id);
         const updatedTask = await Task.findByIdAndUpdate(id, update, { new: true, runValidators: true });
         if (!updatedTask) {
