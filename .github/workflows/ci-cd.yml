@@ -83,7 +83,7 @@ jobs:
         if: always()
         run: |
           echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          node -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;const c=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];let table='\n| Metric | Backend % | Frontend % | Combined % |\n|--------|-----------|------------|-----------|\n';for(const m of metrics){table+=`| ${m} | ${b[m].pct}% | ${f[m].pct}% | ${c[m].pct}% |\n`;}fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,table);"
+          node -e "const fs=require('fs');const read=p=>JSON.parse(fs.readFileSync(p)).total;const b=read('backend/coverage-unit/coverage-summary.json');const f=read('frontend/coverage/coverage-summary.json');const c=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];let table='\n| Metric | Backend % | Frontend % | Combined % |\n|--------|-----------|------------|-----------|\n';table+=metrics.map(m=>'| '+m+' | '+b[m].pct+'% | '+f[m].pct+'% | '+c[m].pct+'% |').join('\n')+'\n';fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,table);"
 
   build:
     name: Frontend Build
