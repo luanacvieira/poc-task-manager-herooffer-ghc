@@ -3,25 +3,69 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "**" ]
 
 jobs:
-  build:
+  build-test:
+    name: Build & Test (Backend + Frontend)
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-    - name: Install dependencies
-      run: |
-        cd backend
-        npm install
-    - name: Run tests
-      run: |
-        cd backend
-        npm test
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Backend - Install
+        working-directory: backend
+        run: npm ci || npm install
+
+      - name: Backend - Lint
+        working-directory: backend
+        run: |
+          if npm run | grep -q "lint"; then npm run lint; else echo "(no lint script)"; fi
+
+      - name: Backend - Test
+        working-directory: backend
+        env:
+          NODE_ENV: test
+        run: npm test -- --ci --runInBand
+
+      - name: Frontend - Install
+        working-directory: frontend
+        run: npm ci || npm install --legacy-peer-deps
+
+      - name: Frontend - Typecheck
+        working-directory: frontend
+        run: |
+          if npm run | grep -q "typecheck"; then npm run typecheck; else echo "(no typecheck script)"; fi
+
+      - name: Frontend - Test
+        working-directory: frontend
+        env:
+          CI: true
+        run: |
+          if npm run | grep -q "test"; then npm test -- --watchAll=false; else echo "(no test script)"; fi
+
+      - name: Frontend - Build
+        working-directory: frontend
+        run: |
+          if npm run | grep -q "build"; then npm run build; else echo "(no build script)"; fi
+
+      - name: Upload frontend build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+            name: frontend-build-${{ github.sha }}
+            path: frontend/build
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Backend tests & lint: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          if [ -d frontend/build ]; then echo "Frontend build size:" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
