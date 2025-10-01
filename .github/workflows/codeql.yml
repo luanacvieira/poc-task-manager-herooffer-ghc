@@ -70,6 +70,23 @@ jobs:
         run: |
           node -e "const fs=require('fs');const p='coverage/coverage-summary.json';const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Frontend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK:',s);"
 
+      - name: Consolidate coverage (backend + frontend)
+        run: |
+          node -e "\n          const fs=require('fs');\n          const backend=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json'));\n          const frontend=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json'));\n          function pick(t){return t.total || t;}\n          const b=pick(backend), f=pick(frontend);\n          const metrics=['lines','branches','functions','statements'];\n          const aggregate={};\n          for(const m of metrics){\n            const covered=(b[m].covered||0)+(f[m].covered||0);\n            const total=(b[m].total||0)+(f[m].total||0);\n            aggregate[m]={ total, covered, skipped: (b[m].skipped||0)+(f[m].skipped||0), pct: total? +(covered*100/total).toFixed(2):0 };\n          }\n          const combined={ backend:b, frontend:f, total:aggregate };\n          if(!fs.existsSync('combined-coverage')) fs.mkdirSync('combined-coverage');\n          fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify(combined,null,2));\n          console.log('Combined coverage summary:', aggregate);\n          "
+
+      - name: Enforce combined coverage >= ${{ env.COVERAGE_THRESHOLD }}%
+        run: |
+          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const p='combined-coverage/combined-coverage-summary.json';const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Combined coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Combined coverage OK:',s);"
+
+      - name: Add coverage summary to job summary
+        if: always()
+        run: |
+          echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "\n| Metric | Backend % | Frontend % | Combined % |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-----------|------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          node -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;const c=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];for(const m of metrics){console.log(`| ${m} | ${b[m].pct}% | ${f[m].pct}% | ${c[m].pct}% |`);}"
+            >> $GITHUB_STEP_SUMMARY
+
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,6 +95,7 @@ jobs:
           path: |
             backend/coverage-unit/**
             frontend/coverage/**
+            combined-coverage/**
 
   analyze:
     name: CodeQL Analyze (${{ matrix.language }})
