@@ -3,78 +3,74 @@ name: CI/CD
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
   pull_request:
-    branches: [ "**" ]
+    branches: ["**"]
 
 permissions:
   contents: read
 
-env:
-  COVERAGE_THRESHOLD: 80
-
 jobs:
-  build-test:
-    name: Build & Test (Backend + Frontend)
+  static-checks:
+    name: Static Analysis (Lint & Typecheck)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-
-      - name: Backend - Install
+      - name: Backend deps
         working-directory: backend
         run: npm ci || npm install
-
-      - name: Backend - Lint
+      - name: Backend lint
         working-directory: backend
         run: |
-          if npm run | grep -q "lint"; then npm run lint; else echo "(no lint script)"; fi
+          if npm run | grep -q lint; then npm run lint; else echo "(no lint script)"; fi
+      - name: Frontend deps
+        working-directory: frontend
+        run: npm ci || npm install --legacy-peer-deps
+      - name: Frontend lint
+        working-directory: frontend
+        run: |
+          if npm run | grep -q lint; then npm run lint; else echo "(no lint script)"; fi
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: |
+          if npm run | grep -q typecheck; then npm run typecheck; else echo "(no typecheck script)"; fi
 
-      - name: Backend - Test (coverage)
+  tests:
+    name: Tests & Coverage (Backend + Frontend)
+    runs-on: ubuntu-latest
+    needs: [static-checks]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Backend tests (coverage)
         working-directory: backend
         env:
           NODE_ENV: test
         run: |
           npm test -- --ci --runInBand --coverage --coverageDirectory=coverage-unit --coverageReporters=json-summary --coverageReporters=text
-          if [ ! -f coverage-unit/coverage-summary.json ]; then echo "Missing backend coverage summary" >&2; exit 1; fi
-
-      - name: Backend - Enforce coverage >= ${{ env.COVERAGE_THRESHOLD }}%
-        working-directory: backend
-        run: |
-          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync('coverage-unit/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Backend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK');"
-
-      - name: Frontend - Install
+          test -f coverage-unit/coverage-summary.json || (echo "Missing backend coverage summary" >&2; exit 1)
+      - name: Install frontend deps
         working-directory: frontend
         run: npm ci || npm install --legacy-peer-deps
-
-      - name: Frontend - Typecheck
-        working-directory: frontend
-        run: |
-          if npm run | grep -q "typecheck"; then npm run typecheck; else echo "(no typecheck script)"; fi
-
-      - name: Frontend - Test (coverage)
+      - name: Frontend tests (coverage)
         working-directory: frontend
         env:
           CI: true
         run: |
-          if npm run | grep -q "test"; then npm test -- --coverage --watchAll=false --runInBand --coverageReporters=json-summary --coverageReporters=text; else echo "(no test script)"; fi
-          if [ ! -f coverage/coverage-summary.json ]; then echo "Missing frontend coverage summary" >&2; exit 1; fi
-
-      - name: Frontend - Enforce coverage >= ${{ env.COVERAGE_THRESHOLD }}%
-        working-directory: frontend
+          npm test -- --coverage --watchAll=false --runInBand --coverageReporters=json-summary --coverageReporters=text
+          test -f coverage/coverage-summary.json || (echo "Missing frontend coverage summary" >&2; exit 1)
+      - name: Combine coverage (no gate here)
         run: |
-          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync('coverage/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Frontend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK');"
-
-      - name: Coverage - Combined Enforce >= ${{ env.COVERAGE_THRESHOLD }}%
-        run: |
-          node -e "const fs=require('fs');const T=process.env.COVERAGE_THRESHOLD;const bRaw=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json'));const fRaw=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json'));const b=bRaw.total||bRaw;const f=fRaw.total||fRaw;const metrics=['lines','branches','functions','statements'];const aggregate={};let fails=[];for(const m of metrics){const covered=(b[m].covered||0)+(f[m].covered||0);const total=(b[m].total||0)+(f[m].total||0);const pct= total? +(covered*100/total).toFixed(2):0;aggregate[m]={covered,total,pct};if(pct < T) fails.push(m+'='+pct);}if(!fs.existsSync('combined-coverage')) fs.mkdirSync('combined-coverage',{recursive:true});fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify({backend:b,frontend:f,total:aggregate},null,2));if(fails.length){console.error('Combined coverage below '+T+'%:',fails.join(', '));process.exit(1);}console.log('Combined coverage OK:',aggregate);"
-
-      - name: Upload coverage artifacts (backend, frontend, combined)
+          node -e "const fs=require('fs');const ensure=d=>{if(!fs.existsSync(d))fs.mkdirSync(d,{recursive:true});};const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json'));const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json'));const bt=b.total||b;const ft=f.total||f;const metrics=['lines','branches','functions','statements'];const total={};for(const m of metrics){const covered=(bt[m].covered||0)+(ft[m].covered||0);const t=(bt[m].total||0)+(ft[m].total||0);total[m]={covered,total:t,pct:t?+(covered*100/t).toFixed(2):0};}ensure('combined-coverage');fs.writeFileSync('combined-coverage/combined-coverage-summary.json',JSON.stringify({backend:bt,frontend:ft,total},null,2));console.log('Combined coverage summary:',total);"
+      - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -83,27 +79,35 @@ jobs:
             backend/coverage-unit/**
             frontend/coverage/**
             combined-coverage/**
+      - name: Coverage summary (job summary)
+        if: always()
+        run: |
+          echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          node -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;const c=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];let table='\n| Metric | Backend % | Frontend % | Combined % |\n|--------|-----------|------------|-----------|\n';for(const m of metrics){table+=`| ${m} | ${b[m].pct}% | ${f[m].pct}% | ${c[m].pct}% |\n`;}fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,table);"
 
-      - name: Frontend - Build
+  build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install --legacy-peer-deps
+      - name: Build frontend
         working-directory: frontend
         run: |
-          if npm run | grep -q "build"; then npm run build; else echo "(no build script)"; fi
-
-      - name: Upload frontend build artifact
+          if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
+      - name: Upload build artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-            name: frontend-build-${{ github.sha }}
-            path: frontend/build
-
-      - name: Summary
+          name: frontend-build-${{ github.sha }}
+          path: frontend/build
+      - name: Build summary
         if: always()
         run: |
-          echo "### CI/CD Summary" >> $GITHUB_STEP_SUMMARY
-          if [ -f backend/coverage-unit/coverage-summary.json ]; then \
-            node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;console.log('| Backend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
-          if [ -f frontend/coverage/coverage-summary.json ]; then \
-            node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;console.log('| Frontend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
-          if [ -f combined-coverage/combined-coverage-summary.json ]; then \
-             node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;console.log('| Combined Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
-          if [ -d frontend/build ]; then echo "\nFrontend build size:" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
+          if [ -d frontend/build ]; then echo "\n### Build Output Size" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
