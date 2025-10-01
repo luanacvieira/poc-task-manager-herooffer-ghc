@@ -49,9 +49,8 @@
     "@typescript-eslint/parser": "^5.62.0",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "eslint-plugin-react": "^7.34.0",
-    "eslint-plugin-react-hooks": "^4.6.0"
-  },
-  "overrides": {
-    "ajv-keywords": "3.5.2"
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "ajv": "^8.12.0",
+    "ajv-keywords": "^5.1.0"
   }
 }
