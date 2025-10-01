@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ "**" ]
 
+env:
+  COVERAGE_THRESHOLD: 80
+
 jobs:
   build-test:
     name: Build & Test (Backend + Frontend)
@@ -29,11 +32,18 @@ jobs:
         run: |
           if npm run | grep -q "lint"; then npm run lint; else echo "(no lint script)"; fi
 
-      - name: Backend - Test
+      - name: Backend - Test (coverage)
         working-directory: backend
         env:
           NODE_ENV: test
-        run: npm test -- --ci --runInBand
+        run: |
+          npm test -- --ci --runInBand --coverage --coverageDirectory=coverage-unit --coverageReporters=json-summary --coverageReporters=text
+          if [ ! -f coverage-unit/coverage-summary.json ]; then echo "Missing backend coverage summary" >&2; exit 1; fi
+
+      - name: Backend - Enforce coverage >= ${{ env.COVERAGE_THRESHOLD }}%
+        working-directory: backend
+        run: |
+          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync('coverage-unit/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Backend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK');"
 
       - name: Frontend - Install
         working-directory: frontend
@@ -44,12 +54,22 @@ jobs:
         run: |
           if npm run | grep -q "typecheck"; then npm run typecheck; else echo "(no typecheck script)"; fi
 
-      - name: Frontend - Test
+      - name: Frontend - Test (coverage)
         working-directory: frontend
         env:
           CI: true
         run: |
-          if npm run | grep -q "test"; then npm test -- --watchAll=false; else echo "(no test script)"; fi
+          if npm run | grep -q "test"; then npm test -- --coverage --watchAll=false --runInBand --coverageReporters=json-summary --coverageReporters=text; else echo "(no test script)"; fi
+          if [ ! -f coverage/coverage-summary.json ]; then echo "Missing frontend coverage summary" >&2; exit 1; fi
+
+      - name: Frontend - Enforce coverage >= ${{ env.COVERAGE_THRESHOLD }}%
+        working-directory: frontend
+        run: |
+          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync('coverage/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Frontend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK');"
+
+      - name: Coverage - Combined Enforce >= ${{ env.COVERAGE_THRESHOLD }}%
+        run: |
+          node -e "const fs=require('fs');const T=process.env.COVERAGE_THRESHOLD;const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];let fails=[];for(const m of metrics){const covered=(b[m].covered||0)+(f[m].covered||0);const total=(b[m].total||0)+(f[m].total||0);const pct= total? +(covered*100/total).toFixed(2):0;if(pct < T) fails.push(m+'='+pct);}if(fails.length){console.error('Combined coverage below '+T+'%:',fails.join(', '));process.exit(1);}console.log('Combined coverage OK');"
 
       - name: Frontend - Build
         working-directory: frontend
@@ -67,5 +87,8 @@ jobs:
         if: always()
         run: |
           echo "### CI/CD Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Backend tests & lint: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          if [ -d frontend/build ]; then echo "Frontend build size:" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
+          if [ -f backend/coverage-unit/coverage-summary.json ]; then \
+            node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;console.log('| Backend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
+          if [ -f frontend/coverage/coverage-summary.json ]; then \
+            node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;console.log('| Frontend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
+          if [ -d frontend/build ]; then echo "\nFrontend build size:" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
