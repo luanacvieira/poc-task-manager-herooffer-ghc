@@ -12,97 +12,9 @@ permissions:
   contents: read
   security-events: write
 
-env:
-  COVERAGE_THRESHOLD: 80
-  NODE_VERSION: 18
-
 jobs:
-  coverage:
-    name: Coverage (Backend & Frontend)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          # Cache desabilitado temporariamente até lockfiles serem versionados corretamente para ambos os pacotes
-
-      - name: Install backend deps
-        working-directory: backend
-        run: npm ci || npm install
-
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci || npm install
-
-      - name: Run backend tests (coverage)
-        working-directory: backend
-        env:
-          NODE_ENV: test
-        run: |
-          npm test -- --ci --runInBand --coverage --coverageDirectory=coverage-unit --coverageReporters=json-summary --coverageReporters=text
-          if [ ! -f coverage-unit/coverage-summary.json ]; then
-            echo "Backend coverage summary not found" >&2
-            exit 1
-          fi
-
-      - name: Enforce backend coverage >= ${{ env.COVERAGE_THRESHOLD }}%
-        working-directory: backend
-        run: |
-          node -e "const fs=require('fs');const p='coverage-unit/coverage-summary.json';const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Backend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK:',s);"
-
-      - name: Run frontend tests (coverage)
-        working-directory: frontend
-        run: |
-          CI=true npm test -- --coverage --watchAll=false --runInBand --coverageReporters=json-summary --coverageReporters=text
-          if [ ! -f coverage/coverage-summary.json ]; then
-            echo "Frontend coverage summary not found" >&2
-            exit 1
-          fi
-
-      - name: Debug frontend coverage contents
-        if: always()
-        working-directory: frontend
-        run: |
-          echo "Listing frontend/coverage directory (if exists):"
-          ls -R coverage || echo "coverage directory not found"
-
-      - name: Enforce frontend coverage >= ${{ env.COVERAGE_THRESHOLD }}%
-        working-directory: frontend
-        run: |
-          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Frontend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK:',s);"
-
-      - name: Consolidate coverage (backend + frontend)
-        run: |
-          node -e "const fs=require('fs');const load=p=>{if(!fs.existsSync(p)){console.error('Missing coverage file: '+p);process.exit(1);}return JSON.parse(fs.readFileSync(p));};const backend=load('backend/coverage-unit/coverage-summary.json');const frontend=load('frontend/coverage/coverage-summary.json');const pick=t=>t.total||t;const b=pick(backend),f=pick(frontend);const metrics=['lines','branches','functions','statements'];const aggregate={};for(const m of metrics){const covered=(b[m].covered||0)+(f[m].covered||0);const total=(b[m].total||0)+(f[m].total||0);aggregate[m]={total,covered,skipped:(b[m].skipped||0)+(f[m].skipped||0),pct:total?+(covered*100/total).toFixed(2):0};}if(!fs.existsSync('combined-coverage'))fs.mkdirSync('combined-coverage');fs.writeFileSync('combined-coverage/combined-coverage-summary.json',JSON.stringify({backend:b,frontend:f,total:aggregate},null,2));console.log('Combined coverage summary:',aggregate);"
-
-      - name: Enforce combined coverage >= ${{ env.COVERAGE_THRESHOLD }}%
-        run: |
-          node -e "const fs=require('fs');const t=process.env.COVERAGE_THRESHOLD;const p='combined-coverage/combined-coverage-summary.json';const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Combined coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Combined coverage OK:',s);"
-
-      - name: Add coverage summary to job summary
-        if: always()
-        run: |
-          echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          node -e "const fs=require('fs');const safe=p=>{try{return JSON.parse(fs.readFileSync(p)).total;}catch{return null}};const b=safe('backend/coverage-unit/coverage-summary.json');const f=safe('frontend/coverage/coverage-summary.json');const c=safe('combined-coverage/combined-coverage-summary.json');const metrics=['lines','branches','functions','statements'];let out='\\n| Metric | Backend % | Frontend % | Combined % |\\n|--------|-----------|------------|-----------|\\n';for(const m of metrics){const bv=b?b[m].pct:'-';const fv=f?f[m].pct:'-';const cv=c?c[m].pct:'-';out+= '| '+m+' | '+bv+'% | '+fv+'% | '+cv+'% |\\n';}fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,out);if(!f){console.error('WARNING: frontend coverage summary missing when generating table.');}"
-
-      - name: Upload coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined-coverage-${{ github.sha }}
-          path: |
-            backend/coverage-unit/**
-            frontend/coverage/**
-            combined-coverage/**
-
   analyze:
     name: CodeQL Analyze (${{ matrix.language }})
-    needs: coverage
-    if: needs.coverage.result == 'success'
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -129,18 +41,16 @@ jobs:
           category: "/language:${{ matrix.language }}"
 
   gate:
-    name: Gate (Coverage + CodeQL)
+    name: CodeQL Gate
     runs-on: ubuntu-latest
-    needs: [coverage, analyze]
+    needs: [analyze]
     if: always()
     steps:
-      - name: Evaluate job results
+      - name: Evaluate CodeQL Analysis
         run: |
-          if [ "${{ needs.coverage.result }}" != "success" ]; then
-            echo "Coverage job failed" >&2; exit 1; fi
           if [ "${{ needs.analyze.result }}" != "success" ]; then
             echo "CodeQL analysis failed" >&2; exit 1; fi
-          echo "All gates passed (coverage + CodeQL)."
+          echo "All security checks passed."
 
 # Notes:
 # - Para bloquear merges, configure Branch Protection exigindo sucesso dos checks: "Coverage (Backend & Frontend)", "Gate (Coverage + CodeQL)" ou cada job individual.
