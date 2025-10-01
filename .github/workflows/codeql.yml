@@ -30,10 +30,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+          # Cache desabilitado temporariamente até lockfiles serem versionados corretamente para ambos os pacotes
 
       - name: Install backend deps
         working-directory: backend
@@ -85,7 +82,7 @@ jobs:
         if: always()
         run: |
           echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          node -e "const fs=require('fs');function safe(p){try{return JSON.parse(fs.readFileSync(p)).total;}catch(e){return null}};const b=safe('backend/coverage-unit/coverage-summary.json');const f=safe('frontend/coverage/coverage-summary.json');const c=safe('combined-coverage/combined-coverage-summary.json');const metrics=['lines','branches','functions','statements'];let out='\n| Metric | Backend % | Frontend % | Combined % |\n|--------|-----------|------------|-----------|\n';for(const m of metrics){const bv=b?b[m].pct:'-';const fv=f?f[m].pct:'-';const cv=c?c[m].pct:'-';out+=`| ${m} | ${bv}% | ${fv}% | ${cv}% |\n`;};fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,out);if(!f){console.error('WARNING: frontend coverage summary missing when generating table.');}"
+          node -e "const fs=require('fs');const safe=p=>{try{return JSON.parse(fs.readFileSync(p)).total;}catch{return null}};const b=safe('backend/coverage-unit/coverage-summary.json');const f=safe('frontend/coverage/coverage-summary.json');const c=safe('combined-coverage/combined-coverage-summary.json');const metrics=['lines','branches','functions','statements'];let out='\\n| Metric | Backend % | Frontend % | Combined % |\\n|--------|-----------|------------|-----------|\\n';for(const m of metrics){const bv=b?b[m].pct:'-';const fv=f?f[m].pct:'-';const cv=c?c[m].pct:'-';out+= '| '+m+' | '+bv+'% | '+fv+'% | '+cv+'% |\\n';}fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,out);if(!f){console.error('WARNING: frontend coverage summary missing when generating table.');}"
 
       - name: Upload coverage artifacts
         if: always()
