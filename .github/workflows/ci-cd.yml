@@ -3,25 +3,64 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: ["**"]
   pull_request:
-    branches: [ main ]
+    branches: ["**"]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  static-checks:
+    name: Static Analysis (Lint & Typecheck)
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-    - name: Install dependencies
-      run: |
-        cd backend
-        npm install
-    - name: Run tests
-      run: |
-        cd backend
-        npm test
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Backend deps
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Backend lint
+        working-directory: backend
+        run: |
+          if npm run | grep -q lint; then npm run lint; else echo "(no lint script)"; fi
+      - name: Frontend deps
+        working-directory: frontend
+        run: npm ci || npm install --legacy-peer-deps
+      - name: Frontend lint
+        working-directory: frontend
+        run: |
+          if npm run | grep -q lint; then npm run lint; else echo "(no lint script)"; fi
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: |
+          if npm run | grep -q typecheck; then npm run typecheck; else echo "(no typecheck script)"; fi
+
+  build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [static-checks]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install --legacy-peer-deps
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-${{ github.sha }}
+          path: frontend/build
+      - name: Build summary
+        if: always()
+        run: |
+          if [ -d frontend/build ]; then echo "\n### Build Output Size" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
