@@ -1,0 +1,128 @@
+name: CodeQL + Coverage Gate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  packages: read
+
+env:
+  COVERAGE_THRESHOLD: 80
+  NODE_VERSION: 18
+
+jobs:
+  coverage:
+    name: Coverage (Backend & Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci || npm install
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install
+
+      - name: Run backend tests (coverage)
+        working-directory: backend
+        env:
+          NODE_ENV: test
+        run: |
+          npm test -- --ci --runInBand --coverage --coverageDirectory=coverage-unit --coverageReporters=json-summary --coverageReporters=text
+          if [ ! -f coverage-unit/coverage-summary.json ]; then
+            echo "Backend coverage summary not found" >&2
+            exit 1
+          fi
+
+      - name: Enforce backend coverage >= ${{ env.COVERAGE_THRESHOLD }}%
+        working-directory: backend
+        run: |
+          node -e "const fs=require('fs');const p='coverage-unit/coverage-summary.json';const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Backend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK:',s);"
+
+      - name: Run frontend tests (coverage)
+        working-directory: frontend
+        run: |
+          CI=true npm test -- --coverage --watchAll=false --runInBand --coverageReporters=json-summary --coverageReporters=text
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "Frontend coverage summary not found" >&2
+            exit 1
+          fi
+
+      - name: Enforce frontend coverage >= ${{ env.COVERAGE_THRESHOLD }}%
+        working-directory: frontend
+        run: |
+          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';const t=process.env.COVERAGE_THRESHOLD;const s=JSON.parse(fs.readFileSync(p)).total;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct < t);if(fails.length){console.error('Frontend coverage below '+t+'%:',fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK:',s);"
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-coverage-${{ github.sha }}
+          path: |
+            backend/coverage-unit/**
+            frontend/coverage/**
+
+  analyze:
+    name: CodeQL Analyze (${{ matrix.language }})
+    needs: coverage
+    if: needs.coverage.result == 'success'
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  gate:
+    name: Gate (Coverage + CodeQL)
+    runs-on: ubuntu-latest
+    needs: [coverage, analyze]
+    if: always()
+    steps:
+      - name: Evaluate job results
+        run: |
+          if [ "${{ needs.coverage.result }}" != "success" ]; then
+            echo "Coverage job failed" >&2; exit 1; fi
+          if [ "${{ needs.analyze.result }}" != "success" ]; then
+            echo "CodeQL analysis failed" >&2; exit 1; fi
+          echo "All gates passed (coverage + CodeQL)."
+
+# Notes:
+# - Para bloquear merges, configure Branch Protection exigindo sucesso dos checks: "Coverage (Backend & Frontend)", "Gate (Coverage + CodeQL)" ou cada job individual.
+# - GitHub não impede um push direto; ele bloqueia o merge se o status requerido falhar.
+# - Se quiser rodar apenas em branches específicas, ajuste os filtros em 'on:'.
