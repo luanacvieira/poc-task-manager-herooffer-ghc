@@ -1,10 +1,11 @@
 name: CodeQL
 
 on:
-  push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
+  # Roda análise apenas depois que os workflows de testes concluírem com sucesso
+  workflow_run:
+    workflows: ["Test and Coverage Check", "CI/CD"]
+    types: [completed]
+  # Mantém execução programada semanal para varredura periódica independente
   schedule:
     - cron: '0 4 * * 1'
 
@@ -12,8 +13,15 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: codeql-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
+    # Só roda se: (workflow_run bem sucedido) OU (execução programada)
+    if: >-
+      ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: CodeQL Analyze (${{ matrix.language }})
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     strategy:
@@ -25,7 +33,14 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - name: Checkout repository
+      - name: Checkout (tested commit)
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Checkout (scheduled)
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
@@ -53,6 +68,6 @@ jobs:
           echo "All security checks passed."
 
 # Notes:
-# - Para bloquear merges, configure Branch Protection exigindo sucesso dos checks: "Coverage (Backend & Frontend)", "Gate (Coverage + CodeQL)" ou cada job individual.
-# - GitHub não impede um push direto; ele bloqueia o merge se o status requerido falhar.
-# - Se quiser rodar apenas em branches específicas, ajuste os filtros em 'on:'.
+# - Branch Protection: exigir o check "CodeQL Gate" + os checks de testes/cobertura.
+# - Este workflow agora dispara somente após sucesso dos workflows de testes (workflow_run) ou via schedule semanal.
+# - Concurrency evita execuções duplicadas para o mesmo commit quando ambos workflows de teste finalizam quase juntos.
