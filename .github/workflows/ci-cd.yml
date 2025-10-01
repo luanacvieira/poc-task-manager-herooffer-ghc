@@ -69,7 +69,17 @@ jobs:
 
       - name: Coverage - Combined Enforce >= ${{ env.COVERAGE_THRESHOLD }}%
         run: |
-          node -e "const fs=require('fs');const T=process.env.COVERAGE_THRESHOLD;const b=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;const f=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;const metrics=['lines','branches','functions','statements'];let fails=[];for(const m of metrics){const covered=(b[m].covered||0)+(f[m].covered||0);const total=(b[m].total||0)+(f[m].total||0);const pct= total? +(covered*100/total).toFixed(2):0;if(pct < T) fails.push(m+'='+pct);}if(fails.length){console.error('Combined coverage below '+T+'%:',fails.join(', '));process.exit(1);}console.log('Combined coverage OK');"
+          node -e "const fs=require('fs');const T=process.env.COVERAGE_THRESHOLD;const bRaw=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json'));const fRaw=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json'));const b=bRaw.total||bRaw;const f=fRaw.total||fRaw;const metrics=['lines','branches','functions','statements'];const aggregate={};let fails=[];for(const m of metrics){const covered=(b[m].covered||0)+(f[m].covered||0);const total=(b[m].total||0)+(f[m].total||0);const pct= total? +(covered*100/total).toFixed(2):0;aggregate[m]={covered,total,pct};if(pct < T) fails.push(m+'='+pct);}if(!fs.existsSync('combined-coverage')) fs.mkdirSync('combined-coverage',{recursive:true});fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify({backend:b,frontend:f,total:aggregate},null,2));if(fails.length){console.error('Combined coverage below '+T+'%:',fails.join(', '));process.exit(1);}console.log('Combined coverage OK:',aggregate);"
+
+      - name: Upload coverage artifacts (backend, frontend, combined)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: |
+            backend/coverage-unit/**
+            frontend/coverage/**
+            combined-coverage/**
 
       - name: Frontend - Build
         working-directory: frontend
@@ -91,4 +101,6 @@ jobs:
             node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('backend/coverage-unit/coverage-summary.json')).total;console.log('| Backend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
           if [ -f frontend/coverage/coverage-summary.json ]; then \
             node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('frontend/coverage/coverage-summary.json')).total;console.log('| Frontend Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
+          if [ -f combined-coverage/combined-coverage-summary.json ]; then \
+             node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('combined-coverage/combined-coverage-summary.json')).total;console.log('| Combined Coverage | Lines '+s.lines.pct+'% | Branches '+s.branches.pct+'% | Funcs '+s.functions.pct+'% | Statements '+s.statements.pct+'% |');" >> $GITHUB_STEP_SUMMARY; fi
           if [ -d frontend/build ]; then echo "\nFrontend build size:" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
