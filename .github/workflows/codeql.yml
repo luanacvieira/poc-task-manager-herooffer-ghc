@@ -65,6 +65,13 @@ jobs:
             exit 1
           fi
 
+      - name: Debug frontend coverage contents
+        if: always()
+        working-directory: frontend
+        run: |
+          echo "Listing frontend/coverage directory (if exists):"
+          ls -R coverage || echo "coverage directory not found"
+
       - name: Enforce frontend coverage >= ${{ env.COVERAGE_THRESHOLD }}%
         working-directory: frontend
         run: |
