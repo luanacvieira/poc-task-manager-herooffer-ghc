@@ -35,10 +35,10 @@ jobs:
       - name: Run Backend Tests (unit + integration)
         working-directory: backend
         run: |
-          # Usar script npm para manter consistência (respeita jest.config.unit.js). Adiciona coverageReporters.
-          npm test -- --coverageDirectory coverage-unit \
+          # json-summary é um coverageReporter, não um test reporter. Ajustado para garantir geração de coverage-summary.json
+          npx jest --config jest.config.unit.js --coverage --coverageDirectory coverage-unit --reporters=default \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
-          if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js --runInBand; fi
+          if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js; fi
       - name: Upload Backend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -68,9 +68,8 @@ jobs:
         env:
           CI: true
         run: |
-          # Usar react-scripts test para aproveitar configuração TS/Babel embutida e evitar erro de parsing do 'as' TypeScript.
-          # Adicionamos coverageReporters extras para garantir geração de json-summary.
-          npm test -- --watchAll=false --coverage \
+          # Ajuste: usar coverageReporters para json-summary em vez de test reporter
+          npx jest --coverage --coverageDirectory coverage --reporters=default \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
@@ -163,10 +162,7 @@ jobs:
           echo "Para publicar um badge público: publicar coverage-badge.json (ex: branch gh-pages) e usar shields.io: https://img.shields.io/endpoint?url=<RAW-URL>" >> $GITHUB_STEP_SUMMARY
           echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
       - name: Publish Coverage Badge to gh-pages
-        # Publica apenas para develop/master. Suporta:
-        # - Execução encadeada (workflow_run) após Static Checks
-        # - Disparo manual (workflow_dispatch) selecionando a branch develop ou master na UI
-        if: ${{ (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'master')) || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'develop' || github.ref_name == 'master')) }}
+        if: ${{ github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'master' }}
         env:
           BADGE_BRANCH: gh-pages
           SRC_BADGE: combined-coverage/coverage-badge.json
