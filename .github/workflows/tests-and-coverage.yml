@@ -35,7 +35,7 @@ jobs:
       - name: Run Backend Tests (unit + integration)
         working-directory: backend
         run: |
-          # Usa npm test (script jest.config.unit.js) e gera json-summary
+          # Usar script npm para manter consistência (respeita jest.config.unit.js). Adiciona coverageReporters.
           npm test -- --coverageDirectory coverage-unit \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
           if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js --runInBand; fi
@@ -68,7 +68,8 @@ jobs:
         env:
           CI: true
         run: |
-          # Usa react-scripts test com coverage e json-summary
+          # Usar react-scripts test para aproveitar configuração TS/Babel embutida e evitar erro de parsing do 'as' TypeScript.
+          # Adicionamos coverageReporters extras para garantir geração de json-summary.
           npm test -- --watchAll=false --coverage \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
       - name: Upload Frontend Coverage
