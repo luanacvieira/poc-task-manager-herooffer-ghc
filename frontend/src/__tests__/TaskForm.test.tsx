@@ -140,7 +140,7 @@ describe('TaskForm Component Tests', () => {
     mockedApi.createTask.mockRejectedValueOnce(new Error('API Error'));
         
         // Mock window.alert
-        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation((..._args: unknown[]) => { /* suppress alert in tests */ });
         
         render(<TaskForm onTaskAdded={mockOnTaskAdded} />);
 

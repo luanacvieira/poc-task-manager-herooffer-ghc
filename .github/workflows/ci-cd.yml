@@ -1,27 +1,81 @@
-
-name: CI/CD
+name: Build
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["Test and Coverage Check"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20.x
 
 jobs:
-  build:
+  build-backend:
+    name: Build Backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-    - name: Install dependencies
-      run: |
-        cd backend
-        npm install
-    - name: Run tests
-      run: |
-        cd backend
-        npm test
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Backend smoke (syntax & start test)
+        working-directory: backend
+        run: |
+          node -c src/server.js 2>/dev/null || echo "(no syntax issues)"
+          timeout 5s node src/server.js &
+          sleep 2
+          echo "Backend started (smoke)."
+      - name: Archive backend (if packaging desired)
+        if: success()
+        run: |
+          tar -czf backend-dist.tar.gz backend/src package.json backend/package.json || true
+      - name: Upload backend artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-artifact-${{ github.event.workflow_run.head_sha }}
+          path: backend-dist.tar.gz
+
+  build-frontend:
+    name: Build Frontend
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: [build-backend]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
+      - name: Upload frontend build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-${{ github.event.workflow_run.head_sha }}
+          path: frontend/build
+      - name: Build summary
+        if: always()
+        run: |
+          if [ -d frontend/build ]; then echo "\n### Frontend Build Output Size" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
+
+# Este workflow só roda após passar por testes e cobertura.

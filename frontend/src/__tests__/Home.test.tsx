@@ -56,7 +56,8 @@ describe('Home Component Tests', () => {
     });
 
     test('should render loading state initially', () => {
-        mockedAxios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
+        // Never resolves promise to simulate loading state; donor executor logs to avoid empty fn lint
+        mockedAxios.get.mockImplementation(() => new Promise(() => { /* intentional noop to keep pending */ }));
         
         render(<Home />);
         
@@ -168,7 +169,7 @@ describe('Home Component Tests', () => {
     });
 
     test('should handle API errors gracefully', async () => {
-        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((..._args: unknown[]) => { /* swallow error log */ });
         mockedAxios.get.mockRejectedValueOnce(new Error('API Error'));
         
         render(<Home />);
@@ -229,7 +230,7 @@ describe('Home Component Tests', () => {
     });
 
     test('should handle toggle completion errors', async () => {
-        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((..._args: unknown[]) => { /* noop */ });
         mockedAxios.get.mockResolvedValueOnce({ data: mockTasks });
         mockedAxios.put.mockRejectedValueOnce(new Error('Update failed'));
         
@@ -250,7 +251,7 @@ describe('Home Component Tests', () => {
     });
 
     test('should handle delete task errors', async () => {
-        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((..._args: unknown[]) => { /* noop */ });
         mockedAxios.get.mockResolvedValueOnce({ data: mockTasks });
         mockedAxios.delete.mockRejectedValueOnce(new Error('Delete failed'));
         const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
