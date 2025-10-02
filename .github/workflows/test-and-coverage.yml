@@ -1,0 +1,150 @@
+name: Test and Coverage Check (DEPRECATED - DELETE THIS FILE)
+
+# ==============================================================
+# DEPRECATED WORKFLOW
+# Este arquivo é duplicado da cadeia nova `tests-and-coverage.yml`.
+# Não é mais usado na pipeline encadeada (Static Checks -> Test and Coverage Check -> Build -> CodeQL).
+# Mantenha apenas enquanto confirma que os Required Checks foram
+# atualizados. Depois REMOVA este arquivo do repositório.
+# ==============================================================
+
+on:
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+  backend:
+    name: Backend Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: [lint]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run backend unit tests (with coverage & thresholds)
+        run: npm test -- --ci --runInBand
+        env:
+          NODE_ENV: test
+
+      - name: Debug list coverage files
+        if: always()
+        run: |
+          echo "Current directory:" && pwd
+          echo "List root (backend working dir):" && ls -al
+          echo "List coverage-unit directory:" && ls -al coverage-unit || echo "coverage-unit directory not found"
+
+      - name: Enforce backend coverage >= 80%
+        run: |
+          node -e "const fs=require('fs');const p='coverage-unit/coverage-summary.json';if(!fs.existsSync(p)){console.error('backend coverage summary not found at '+p);process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Backend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Backend coverage OK >= '+req+'% for all metrics.');"
+
+      - name: Upload backend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage-unit/**
+
+  frontend:
+    name: Frontend Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: [lint]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run frontend tests with coverage & thresholds
+        # CRA passa args ao jest após '--'
+        run: |
+          CI=true npm test -- --coverage --watchAll=false --runInBand \
+            --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary --coverageReporters=html
+
+      - name: Debug list frontend coverage files
+        if: always()
+        run: |
+          echo "Current directory:" && pwd
+          echo "List root (frontend working dir):" && ls -al
+          echo "List coverage directory:" && ls -al coverage || echo "coverage directory not found"
+
+      - name: Enforce frontend coverage >= 80%
+        run: |
+          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(!fs.existsSync(p)){console.error('frontend coverage summary not found (expected json-summary reporter).');process.exit(1);}const s=JSON.parse(fs.readFileSync(p)).total;console.log('Frontend coverage summary:',s);const req=80;const metrics=['lines','branches','functions','statements'];const fails=metrics.filter(m=>s[m].pct<req);if(fails.length){console.error('Frontend coverage below '+req+'%: '+fails.map(m=>m+'='+s[m].pct).join(', '));process.exit(1);}console.log('Frontend coverage OK >= '+req+'% for all metrics.');"
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/**
+
+  summary:
+    name: Summary (gate)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: always()
+    steps:
+      - name: Mark workflow status
+        run: |
+          if [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "One or more jobs failed (backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }})" >&2
+            exit 1
+          else
+            echo "All test jobs succeeded."
+          fi

@@ -1,0 +1,14 @@
+name: Test and Coverage Check (DEPRECATED - OLD)
+
+# Arquivo renomeado para test-and-coverage.old.yml apenas para sinalizar remoção manual.
+# Não usar. A cadeia oficial agora usa o workflow_run "Test and Coverage Check" em `tests-and-coverage.yml`.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecation Notice
+        run: echo "Deprecated old test workflow. Pode remover test-and-coverage.old.yml com segurança."
