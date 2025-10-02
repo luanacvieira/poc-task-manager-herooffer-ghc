@@ -81,8 +81,14 @@ jobs:
     name: Coverage Gate (>=80%)
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
+    # Ajuste: incluir eventos push e pull_request além de workflow_run e workflow_dispatch
     if: >-
-      ${{ always() && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
+      ${{ always() && (
+          github.event_name == 'push' ||
+          github.event_name == 'pull_request' ||
+          github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+        ) }}
     steps:
       - name: Checkout (tested commit)
         uses: actions/checkout@v4
