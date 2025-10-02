@@ -87,11 +87,12 @@ jobs:
     name: Coverage Gate (>=80%)
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
-    if: >-
-      ${{ always() && (github.event_name == 'workflow_dispatch' || 
-          github.event_name == 'push' || 
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')) }}
+    if: ${{ always() && (
+        github.event_name == 'push' ||
+        github.event_name == 'pull_request' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      ) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -266,7 +267,6 @@ jobs:
           git config user.email "actions@github.com"
           git add README.md || true
           if git diff --cached --quiet; then
-            echo "README unchanged"; else git commit -m "docs(badges): update dynamic badges block (${HEAD_BRANCH})" || true; fi
       - name: Push README update
         if: success()
         run: |
