@@ -38,6 +38,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
       # Download coverage artifacts gerados no workflow anterior (caso workflow_run)
       - name: Download backend coverage artifact
