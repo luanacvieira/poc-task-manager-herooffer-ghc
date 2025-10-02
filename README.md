@@ -102,11 +102,17 @@ chmod +x .githooks/pre-push
 ```
 
 ## Badge de Cobertura (Automatizado)
-Arquivos publicados (branch `badges`):
-- `badges/coverage-badge.json` (última média combinada geral)
-- `badges/coverage-badge-master.json` (específico master)
-- `badges/coverage-gate-badge*.json` (pass/fail do gate)
-- `badges/history/coverage-history*.json` (históricos global e por branch)
+
+Os badges são gerados automaticamente pelo workflow **"Test and Coverage Check"** (job `coverage-gate`) e publicados na branch `badges` dedicada. O sistema suporta múltiplas branches com arquivos específicos sanitizados.
+
+**Arquivos publicados (branch `badges`):**
+- `badges/coverage-badge.json` (cobertura geral - última branch)
+- `badges/coverage-badge-<safeBranch>.json` (específico por branch)
+- `badges/coverage-gate-badge-<safeBranch>.json` (pass/fail do gate ≥80%)
+- `badges/build-status-badge-<safeBranch>.json` (status do build)
+- `badges/history/coverage-history.json` (histórico global - últimas 500 entradas)
+- `badges/history/coverage-history-<safeBranch>.json` (histórico por branch - últimas 200)
+- `badges/history/coverage-latest-<safeBranch>.json` (snapshot mais recente)
 
 Formato (`coverage-badge.json`):
 ```json
@@ -114,20 +120,30 @@ Formato (`coverage-badge.json`):
 ```
 Cor dinâmica: >=90 brightgreen, >=80 green, senão orange.
 
-### Como validar após merge
-1. Merge ou commit em `master`.
-2. Aguardar: Static Checks → Test and Coverage Check → Sonar → Build.
-3. Abrir branch `badges` → arquivo `badges/coverage-badge-master.json`.
-4. (Opcional) Ver histórico: `badges/history/coverage-history-master.json`.
-5. Se Shields demorar a atualizar, acrescentar `&cacheSeconds=60`.
+### Como validar após commit/push
+1. **Push em qualquer branch** (master, develop, feature/*)
+2. **Aguardar sequência completa:**
+   - ✅ Static Checks (CodeQL, lint)
+   - ✅ Test and Coverage Check (testes + coverage gate + badges)
+   - ✅ Build (build + build badge)  
+   - ✅ SonarCloud Analysis (qualidade + métricas)
+3. **Verificar branch `badges`** → arquivos gerados:
+   - `badges/coverage-badge-<safeBranch>.json`
+   - `badges/coverage-gate-badge-<safeBranch>.json`
+4. **README atualizado automaticamente** com badges específicos da branch
+5. **Histórico disponível:** `badges/history/coverage-history-<safeBranch>.json`
+6. **Se badges demoram:** adicionar `&cacheSeconds=60` na URL do Shields
 
 ### Exemplos de URLs (master)
 Coverage: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-master.json`
 Gate: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-master.json`
 Build: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/build-status-badge-master.json`
 
-### Problemas comuns
-- Badge não atualiza: workflow não terminou ou cache Shields.
-- Gate fail: alguma métrica <80% (ver artifact combined-coverage-summary.json).
-- 404: branch `badges` ainda não tem aquele arquivo (workflow não rodou para essa branch).
+### Problemas comuns e soluções
+- **Badge "resource not found":** Workflow ainda não rodou para essa branch ou falhou na etapa de coverage
+- **Badge não atualiza:** Cache do Shields.io (aguarde ou adicione `&cacheSeconds=60`)
+- **Coverage Gate FAIL:** Alguma métrica <80% (lines/statements/functions/branches) - verificar logs do workflow
+- **README não atualizado:** Workflow falhou no step de atualização ou conflitos de git  
+- **Arquivos missing na branch `badges`:** Workflow "Test and Coverage Check" não completou com sucesso
+- **SonarCloud sem coverage:** Artifacts não chegaram ou expiraram (agora tem fallback gracioso)
 
