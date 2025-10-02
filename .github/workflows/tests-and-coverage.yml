@@ -63,13 +63,13 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci || npm install
-      - name: Run Frontend Tests
+      - name: Run Frontend Tests (CRA Jest)
         working-directory: frontend
         env:
           CI: true
         run: |
-          # Ajuste: usar coverageReporters para json-summary em vez de test reporter
-          npx jest --coverage --coverageDirectory coverage --reporters=default \
+          # Usar react-scripts para garantir Babel/TypeScript transform corretos
+          npm test -- --coverage --watchAll=false \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
