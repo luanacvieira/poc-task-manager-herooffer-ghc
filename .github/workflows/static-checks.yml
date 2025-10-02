@@ -19,6 +19,8 @@ on:
       - '.github/pull_request_template.md'
       - 'LICENSE'
       - 'README.md'
+  # Execução manual (permite iniciar cadeia inteira a partir deste ponto)
+  workflow_dispatch:
 
 permissions:
   contents: read
