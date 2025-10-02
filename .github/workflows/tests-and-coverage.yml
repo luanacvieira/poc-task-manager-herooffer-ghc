@@ -166,30 +166,38 @@ jobs:
         env:
           BADGE_BRANCH: gh-pages
           SRC_BADGE: combined-coverage/coverage-badge.json
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          # Para workflow_dispatch não existe event.workflow_run -> fallback para ref_name
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
-          echo "Publishing coverage badge for branch $HEAD_BRANCH to $BADGE_BRANCH";
+          set -euo pipefail
+          echo "Publishing coverage badge for branch '$HEAD_BRANCH' to '$BADGE_BRANCH'"
+          # Salvar cópias temporárias ANTES de possivelmente limpar working tree (orphan)
+          cp "$SRC_BADGE" /tmp/coverage-badge.json
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json /tmp/coverage-gate-badge.json; fi
+
           git fetch origin $BADGE_BRANCH || true
           if git show-ref --verify --quiet refs/remotes/origin/$BADGE_BRANCH; then
             git checkout $BADGE_BRANCH
             git reset --hard origin/$BADGE_BRANCH
           else
             git checkout --orphan $BADGE_BRANCH
-            rm -rf *
+            # Limpa apenas arquivos rastreados; evita apagar o que salvamos em /tmp
+            git rm -rf . 2>/dev/null || true
+            rm -rf * .[^.]* 2>/dev/null || true
           fi
+
           mkdir -p badges
-          cp "$SRC_BADGE" badges/coverage-badge.json
-          # Gate badge
-          if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
+          cp /tmp/coverage-badge.json badges/coverage-badge.json
+          if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
+
           # Nome específico da branch
-          if [ "$HEAD_BRANCH" = "develop" ]; then cp "$SRC_BADGE" badges/coverage-badge-develop.json; fi
-          if [ "$HEAD_BRANCH" = "master" ]; then cp "$SRC_BADGE" badges/coverage-badge-master.json; fi
+          if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-develop.json; fi
+          if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-master.json; fi
           # Gate badge por branch
-          if [ -f combined-coverage/coverage-gate-badge.json ]; then
-            if [ "$HEAD_BRANCH" = "develop" ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-develop.json; fi
-            if [ "$HEAD_BRANCH" = "master" ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-master.json; fi
+          if [ -f /tmp/coverage-gate-badge.json ]; then
+            if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-develop.json; fi
+            if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-master.json; fi
           fi
-          # Index opcional
           echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
           git config user.name "github-actions"
           git config user.email "actions@github.com"
