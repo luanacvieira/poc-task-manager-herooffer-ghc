@@ -1,0 +1,214 @@
+name: Test and Coverage Check
+
+on:
+  workflow_run:
+    workflows: ["Static Checks"]
+    types: [completed]
+  # Disparo manual opcional para regenerar badge de cobertura
+  workflow_dispatch:
+
+permissions:
+  contents: write  # necessário para publicar badge em gh-pages
+
+env:
+  NODE_VERSION: 20.x
+
+jobs:
+  test-backend:
+    name: Test Backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (tested commit)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Run Backend Tests (unit + integration)
+        working-directory: backend
+        run: |
+          # json-summary é um coverageReporter, não um test reporter. Ajustado para garantir geração de coverage-summary.json
+          npx jest --config jest.config.unit.js --coverage --coverageDirectory coverage-unit --reporters=default \
+            --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
+          if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js; fi
+      - name: Upload Backend Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage-unit/coverage-summary.json
+
+  test-frontend:
+    name: Test Frontend
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (tested commit)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Run Frontend Tests (CRA Jest)
+        working-directory: frontend
+        env:
+          CI: true
+        run: |
+          # Usar react-scripts para garantir Babel/TypeScript transform corretos
+          npm test -- --coverage --watchAll=false \
+            --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
+      - name: Upload Frontend Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/coverage-summary.json
+
+  coverage-gate:
+    name: Coverage Gate (>=80%)
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: >-
+      ${{ always() && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
+    steps:
+      - name: Checkout (tested commit)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Download Coverage Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-artifacts
+      - name: Combine & Enforce Coverage + Generate Badges (pass/fail)
+        run: |
+          export BACKEND_FILE=$(find coverage-artifacts/backend-coverage -name 'coverage-summary.json' | head -n1)
+          export FRONTEND_FILE=$(find coverage-artifacts/frontend-coverage -name 'coverage-summary.json' | head -n1)
+          node <<'EOF'
+          const fs = require('fs');
+          const backendPath = process.env.BACKEND_FILE;
+          const frontendPath = process.env.FRONTEND_FILE;
+          if(!backendPath || !frontendPath){
+            console.error('Missing backend or frontend coverage summary files');
+            fs.mkdirSync('combined-coverage',{recursive:true});
+            fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify({schemaVersion:1,label:'coverage gate',message:'fail',color:'red',error:'missing summary files'}));
+            process.exit(1);
+          }
+          const b = JSON.parse(fs.readFileSync(backendPath,'utf8'));
+            
+          const f = JSON.parse(fs.readFileSync(frontendPath,'utf8'));
+          function mergeMetric(a,b){return { total:a.total + b.total, covered:a.covered + b.covered, skipped:(a.skipped||0)+(b.skipped||0) };}
+          const metrics = Object.keys(b.total);
+          const result = { total:{} };
+          for(const m of metrics){
+            const merged = mergeMetric(b.total[m], f.total[m]);
+            merged.pct = (merged.covered/merged.total*100).toFixed(2);
+            result.total[m]=merged;
+          }
+          const thresholds = { lines:80, statements:80, functions:80, branches:80 };
+          let sum=0,count=0; const failures=[];
+          for(const k of Object.keys(thresholds)){
+            const pct=parseFloat(result.total[k].pct); sum+=pct; count++;
+            if(pct < thresholds[k]) failures.push(`${k}=${pct}`);
+          }
+          const avg=(sum/count).toFixed(2);
+          fs.mkdirSync('combined-coverage',{recursive:true});
+          fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify(result,null,2));
+          const coverageBadge = { schemaVersion:1, label:'coverage', message: avg+'%', color: parseFloat(avg)>=90?'brightgreen':(parseFloat(avg)>=80?'green':'orange') };
+          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify(coverageBadge));
+          const pass = failures.length === 0;
+          const gateBadge = pass
+            ? { schemaVersion:1, label:'coverage gate', message:'pass', color:'green' }
+            : { schemaVersion:1, label:'coverage gate', message:'fail', color:'red', failed: failures };
+          fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify(gateBadge));
+          if(!pass){
+            console.error('Coverage gate failed metrics: '+failures.join(', '));
+            process.exit(1);
+          }
+          console.log('Coverage gate passed. Average coverage:', avg+'%');
+          EOF
+      - name: Upload Combined Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-coverage
+          path: combined-coverage/combined-coverage-summary.json
+      - name: Upload Coverage Badge JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-badge
+          path: combined-coverage/coverage-badge.json
+      - name: Upload Coverage Gate Badge JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-gate-badge
+          path: combined-coverage/coverage-gate-badge.json
+      - name: Coverage Summary Output
+        run: |
+          AVG=$(node -e "const d=require('./combined-coverage/coverage-badge.json');process.stdout.write(d.message)")
+          echo "### Coverage Badge" >> $GITHUB_STEP_SUMMARY
+          echo "Cobertura média combinada: ${AVG}" >> $GITHUB_STEP_SUMMARY
+          echo "Para publicar um badge público: publicar coverage-badge.json (ex: branch gh-pages) e usar shields.io: https://img.shields.io/endpoint?url=<RAW-URL>" >> $GITHUB_STEP_SUMMARY
+          echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
+      - name: Publish Coverage Badge to gh-pages
+        if: ${{ github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'master' }}
+        env:
+          BADGE_BRANCH: gh-pages
+          SRC_BADGE: combined-coverage/coverage-badge.json
+          # Para workflow_dispatch não existe event.workflow_run -> fallback para ref_name
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Publishing coverage badge for branch '$HEAD_BRANCH' to '$BADGE_BRANCH'"
+          # Salvar cópias temporárias ANTES de possivelmente limpar working tree (orphan)
+          cp "$SRC_BADGE" /tmp/coverage-badge.json
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json /tmp/coverage-gate-badge.json; fi
+
+          git fetch origin $BADGE_BRANCH || true
+          if git show-ref --verify --quiet refs/remotes/origin/$BADGE_BRANCH; then
+            git checkout $BADGE_BRANCH
+            git reset --hard origin/$BADGE_BRANCH
+          else
+            git checkout --orphan $BADGE_BRANCH
+            # Limpa apenas arquivos rastreados; evita apagar o que salvamos em /tmp
+            git rm -rf . 2>/dev/null || true
+            rm -rf * .[^.]* 2>/dev/null || true
+          fi
+
+          mkdir -p badges
+          cp /tmp/coverage-badge.json badges/coverage-badge.json
+          if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
+
+          # Nome específico da branch
+          if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-develop.json; fi
+          if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-master.json; fi
+          # Gate badge por branch
+          if [ -f /tmp/coverage-gate-badge.json ]; then
+            if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-develop.json; fi
+            if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-master.json; fi
+          fi
+          echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add badges/*.json
+          if git diff --cached --quiet; then
+            echo "No badge changes to commit";
+          else
+            git commit -m "chore: update coverage badge ($HEAD_BRANCH)"
+            git push origin HEAD:$BADGE_BRANCH
+            echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
+            echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
+          fi
+
+# Próximo workflow (Build) dispara via workflow_run.
