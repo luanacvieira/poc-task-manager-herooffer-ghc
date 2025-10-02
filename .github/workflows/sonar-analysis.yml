@@ -15,8 +15,8 @@ permissions:
   pull-requests: write
 
 env:
-  SONAR_PROJECT_KEY: your_org_yourProjectKey   # substituir
-  SONAR_ORG: your_org                          # substituir
+  SONAR_PROJECT_KEY: github_poc-task-manager-herooffer-ghc
+  SONAR_ORG: luanagithub
   NODE_VERSION: 20.x
 
 jobs:
@@ -82,6 +82,26 @@ jobs:
           test -f backend/coverage-unit/lcov.info || echo "WARN: backend lcov.info ausente"
           test -f frontend/coverage/lcov.info || echo "WARN: frontend lcov.info ausente"
 
+      - name: Merge lcov reports into combined-lcov.info
+        run: |
+          mkdir -p combined-coverage
+          BACKEND=backend/coverage-unit/lcov.info
+            FRONTEND=frontend/coverage/lcov.info
+          if [ -f "$BACKEND" ] && [ -f "$FRONTEND" ]; then
+            # Concat simples é suficiente porque os paths são distintos; Sonar deduplica
+            { echo "TN:"; cat "$BACKEND"; echo "TN:"; cat "$FRONTEND"; } > combined-coverage/combined-lcov.info
+            echo "Merged lcov -> combined-coverage/combined-lcov.info"
+          elif [ -f "$BACKEND" ]; then
+            cp "$BACKEND" combined-coverage/combined-lcov.info
+            echo "Only backend lcov present"
+          elif [ -f "$FRONTEND" ]; then
+            cp "$FRONTEND" combined-coverage/combined-lcov.info
+            echo "Only frontend lcov present"
+          else
+            echo "WARNING: nenhum lcov encontrado, análise sem cobertura" >&2
+          fi
+          ls -l combined-coverage || true
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
@@ -93,7 +113,7 @@ jobs:
             -Dsonar.organization=${{ env.SONAR_ORG }}
             -Dsonar.sources=backend/src,frontend/src
             -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-unit/**,frontend/build/**
-            -Dsonar.javascript.lcov.reportPaths=backend/coverage-unit/lcov.info,frontend/coverage/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=combined-coverage/combined-lcov.info
             -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.tsx,**/__tests__/**,**/tests/**
             -Dsonar.sourceEncoding=UTF-8
 
