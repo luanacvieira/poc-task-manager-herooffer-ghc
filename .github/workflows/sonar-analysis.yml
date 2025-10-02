@@ -1,12 +1,11 @@
 name: SonarCloud Analysis
 
 on:
-  # Option A+E: Execute ONLY after the coverage workflow finishes (any branch) or manually.
+  # Executa apenas após o workflow de testes & cobertura concluir (todas as branches) ou manualmente.
   workflow_run:
     workflows: ["Test and Coverage Check"]
     types: [completed]
   workflow_dispatch:
-
 permissions:
   contents: read
   pull-requests: write
@@ -41,14 +40,12 @@ jobs:
 
       # Download coverage artifacts gerados no workflow anterior (workflow_run path)
       - name: Download backend coverage artifact
-        if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v4
         with:
           name: backend-coverage
           path: backend/coverage-unit
 
       - name: Download frontend coverage artifact
-        if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v4
         with:
           name: frontend-coverage
@@ -59,7 +56,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "[INFO] Manual dispatch: expecting existing coverage artifacts committed previously."
           fi
-
       - name: Validate lcov files
         run: |
           ls -1 backend/coverage-unit || true
