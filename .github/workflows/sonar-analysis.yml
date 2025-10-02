@@ -102,7 +102,8 @@ jobs:
             cp "$FRONTEND" combined-coverage/combined-lcov.info
             echo "Only frontend lcov present"
           else
-            echo "WARNING: nenhum lcov encontrado, análise sem cobertura" >&2
+            echo "ERROR: nenhum lcov encontrado; abortando para evitar enviar cobertura 0" >&2
+            exit 1
           fi
           ls -l combined-coverage || true
 
