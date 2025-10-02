@@ -87,7 +87,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: coverage-artifacts
-      - name: Combine & Enforce Coverage + Generate Badge
+      - name: Combine & Enforce Coverage + Generate Badges (pass/fail)
         run: |
           export BACKEND_FILE=$(find coverage-artifacts/backend-coverage -name 'coverage-summary.json' | head -n1)
           export FRONTEND_FILE=$(find coverage-artifacts/frontend-coverage -name 'coverage-summary.json' | head -n1)
@@ -97,6 +97,8 @@ jobs:
           const frontendPath = process.env.FRONTEND_FILE;
           if(!backendPath || !frontendPath){
             console.error('Missing backend or frontend coverage summary files');
+            fs.mkdirSync('combined-coverage',{recursive:true});
+            fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify({schemaVersion:1,label:'coverage gate',message:'fail',color:'red',error:'missing summary files'}));
             process.exit(1);
           }
           const b = JSON.parse(fs.readFileSync(backendPath,'utf8'));
@@ -111,21 +113,25 @@ jobs:
             result.total[m]=merged;
           }
           const thresholds = { lines:80, statements:80, functions:80, branches:80 };
-          let sum=0,count=0;
+          let sum=0,count=0; const failures=[];
           for(const k of Object.keys(thresholds)){
             const pct=parseFloat(result.total[k].pct); sum+=pct; count++;
-            if(pct < thresholds[k]){
-              console.error(`Coverage gate failed: ${k} ${pct}% < ${thresholds[k]}%`);
-              process.exit(1);
-            }
+            if(pct < thresholds[k]) failures.push(`${k}=${pct}`);
           }
           const avg=(sum/count).toFixed(2);
           fs.mkdirSync('combined-coverage',{recursive:true});
           fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify(result,null,2));
-          const badge = { schemaVersion:1, label:'coverage', message: avg+'%', color: parseFloat(avg)>=90?'brightgreen':(parseFloat(avg)>=80?'green':'orange') };
-          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify(badge));
-          const gateBadge = { schemaVersion:1, label:'coverage gate', message:'pass', color:'success' };
+          const coverageBadge = { schemaVersion:1, label:'coverage', message: avg+'%', color: parseFloat(avg)>=90?'brightgreen':(parseFloat(avg)>=80?'green':'orange') };
+          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify(coverageBadge));
+          const pass = failures.length === 0;
+          const gateBadge = pass
+            ? { schemaVersion:1, label:'coverage gate', message:'pass', color:'green' }
+            : { schemaVersion:1, label:'coverage gate', message:'fail', color:'red', failed: failures };
           fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify(gateBadge));
+          if(!pass){
+            console.error('Coverage gate failed metrics: '+failures.join(', '));
+            process.exit(1);
+          }
           console.log('Coverage gate passed. Average coverage:', avg+'%');
           EOF
       - name: Upload Combined Coverage
