@@ -230,7 +230,7 @@ jobs:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
-          set -e
+          set -euo pipefail
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
           BADGES_URL="https://raw.githubusercontent.com/${REPO}/badges/badges"
           BUILD_URL="${BADGES_URL}/build-status-badge-${SAFE_BRANCH}.json"
@@ -267,8 +267,11 @@ jobs:
           git config user.email "actions@github.com"
           git add README.md || true
           if git diff --cached --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "docs(badges): update dynamic badges block (${HEAD_BRANCH})" || true
+          fi
       - name: Push README update
-        if: success()
         run: |
           git push origin HEAD:${GITHUB_REF_NAME:-${{ github.event.workflow_run.head_branch }}} || echo "Push skipped"
 
