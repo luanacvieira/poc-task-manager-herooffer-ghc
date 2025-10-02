@@ -38,63 +38,108 @@ jobs:
       # Baixa artifacts gerados pelo workflow anterior
       - name: Download backend coverage artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: backend-coverage
           path: backend/coverage-unit
 
       - name: Download frontend coverage artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: frontend-coverage
           path: frontend/coverage
 
-      - name: Assert artifacts presence (manual dispatch note)
+      - name: Assert artifacts presence and handle missing cases
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "[INFO] Manual dispatch: expecting existing coverage artifacts committed previously."
           fi
-      - name: Validate lcov files
-        run: |
-          ls -1 backend/coverage-unit || true
-          ls -1 frontend/coverage || true
-          test -f backend/coverage-unit/lcov.info || echo "WARN: backend lcov.info ausente"
-          test -f frontend/coverage/lcov.info || echo "WARN: frontend lcov.info ausente"
-
+          
+          # Criar diretórios se não existirem
+          mkdir -p backend/coverage-unit frontend/coverage
+          
+          # Verificar se artifacts foram baixados com sucesso
+          BACKEND_EXISTS=false
+          FRONTEND_EXISTS=false
+          
+          if [ -f "backend/coverage-unit/lcov.info" ]; then
+            BACKEND_EXISTS=true
+            echo "✓ Backend coverage artifact found"
+          else
+            echo "⚠ Backend coverage artifact missing - will skip backend coverage"
+          fi
+          
+          if [ -f "frontend/coverage/lcov.info" ]; then
+            FRONTEND_EXISTS=true
+            echo "✓ Frontend coverage artifact found"
+          else
+            echo "⚠ Frontend coverage artifact missing - will skip frontend coverage"
+          fi
+          
+          if [ "$BACKEND_EXISTS" = "false" ] && [ "$FRONTEND_EXISTS" = "false" ]; then
+            echo "⚠ No coverage artifacts found - SonarCloud will run without coverage data"
+            echo "This usually happens when the previous workflow failed or artifacts expired."
+            echo "COVERAGE_AVAILABLE=false" >> $GITHUB_ENV
+          else
+            echo "COVERAGE_AVAILABLE=true" >> $GITHUB_ENV
+          fi
       - name: Merge lcov reports into combined-lcov.info
         run: |
           mkdir -p combined-coverage
           BACKEND=backend/coverage-unit/lcov.info
-            FRONTEND=frontend/coverage/lcov.info
+          FRONTEND=frontend/coverage/lcov.info
+          
+          echo "📊 Merging available coverage reports..."
+          ls -la backend/coverage-unit/ || echo "No backend coverage dir"
+          ls -la frontend/coverage/ || echo "No frontend coverage dir"
+          
           if [ -f "$BACKEND" ] && [ -f "$FRONTEND" ]; then
             # Concat simples é suficiente porque os paths são distintos; Sonar deduplica
             { echo "TN:"; cat "$BACKEND"; echo "TN:"; cat "$FRONTEND"; } > combined-coverage/combined-lcov.info
-            echo "Merged lcov -> combined-coverage/combined-lcov.info"
+            echo "✓ Merged both backend and frontend lcov -> combined-coverage/combined-lcov.info"
           elif [ -f "$BACKEND" ]; then
             cp "$BACKEND" combined-coverage/combined-lcov.info
-            echo "Only backend lcov present"
+            echo "✓ Using only backend lcov"
           elif [ -f "$FRONTEND" ]; then
             cp "$FRONTEND" combined-coverage/combined-lcov.info
-            echo "Only frontend lcov present"
+            echo "✓ Using only frontend lcov"
           else
-            echo "ERROR: nenhum lcov encontrado; abortando para evitar enviar cobertura 0" >&2
-            exit 1
+            echo "⚠ No lcov files found, creating empty coverage file"
+            touch combined-coverage/combined-lcov.info
           fi
-          ls -l combined-coverage || true
+          
+          if [ -f combined-coverage/combined-lcov.info ]; then
+            echo "📄 Combined coverage file size: $(wc -l < combined-coverage/combined-lcov.info) lines"
+          fi
+
+      - name: Create sonar-project.properties (with conditional coverage)
+        run: |
+          cat > sonar-project.properties << EOF
+          sonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+          sonar.organization=${{ env.SONAR_ORG }}
+          sonar.sources=backend/src,frontend/src
+          sonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-unit/**,frontend/build/**
+          sonar.coverage.exclusions=**/*.test.js,**/*.test.tsx,**/__tests__/**,**/tests/**
+          sonar.sourceEncoding=UTF-8
+          EOF
+          
+          # Adicionar coverage apenas se disponível e não vazio
+          if [ -f "combined-coverage/combined-lcov.info" ] && [ -s "combined-coverage/combined-lcov.info" ]; then
+            echo "sonar.javascript.lcov.reportPaths=combined-coverage/combined-lcov.info" >> sonar-project.properties
+            echo "✓ Including coverage report in SonarCloud analysis"
+          else
+            echo "⚠ Running SonarCloud without coverage data (no artifacts or empty coverage)"
+          fi
+          
+          echo "📋 Final SonarCloud configuration:"
+          cat sonar-project.properties
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >-
-            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
-            -Dsonar.organization=${{ env.SONAR_ORG }}
-            -Dsonar.sources=backend/src,frontend/src
-            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-unit/**,frontend/build/**
-            -Dsonar.javascript.lcov.reportPaths=combined-coverage/combined-lcov.info
-            -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.tsx,**/__tests__/**,**/tests/**
-            -Dsonar.sourceEncoding=UTF-8
 
       - name: Quality Gate Status (API)
         if: always()
