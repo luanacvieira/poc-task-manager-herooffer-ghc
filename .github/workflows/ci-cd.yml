@@ -92,7 +92,7 @@ jobs:
   publish-build-badge:
     name: Publish Build Badge
     runs-on: ubuntu-latest
-    needs: [build-frontend]
+    needs: [build-backend, build-frontend]
     if: always()
     steps:
       - name: Determine overall build status
