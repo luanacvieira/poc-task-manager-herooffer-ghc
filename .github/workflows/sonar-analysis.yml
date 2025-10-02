@@ -1,0 +1,128 @@
+name: SonarCloud Analysis
+
+on:
+  workflow_run:
+    workflows: ["Test and Coverage Check"]
+    types: [completed]
+  pull_request:
+    branches: [ master, develop ]
+  push:
+    branches: [ master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  SONAR_PROJECT_KEY: github_poc-task-manager-herooffer-ghc
+  SONAR_ORG: luanagithub
+  NODE_VERSION: 20.x
+
+jobs:
+  sonar:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'pull_request' ||
+          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+          github.event_name == 'push' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # Download coverage artifacts gerados no workflow anterior (caso workflow_run)
+      - name: Download backend coverage artifact
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage-unit
+
+      - name: Download frontend coverage artifact
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+      # Se for PR ou push direto (fora da cadeia) gerar coverage rapidamente
+      - name: Install backend deps (fallback)
+        if: ${{ github.event_name != 'workflow_run' }}
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Run backend unit coverage (fallback)
+        if: ${{ github.event_name != 'workflow_run' }}
+        working-directory: backend
+        run: npx jest --config jest.config.unit.js --coverage --coverageReporters=lcov --coverageDirectory coverage-unit --silent
+
+      - name: Install frontend deps (fallback)
+        if: ${{ github.event_name != 'workflow_run' }}
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Run frontend coverage (fallback)
+        if: ${{ github.event_name != 'workflow_run' }}
+        working-directory: frontend
+        env:
+          CI: true
+        run: npm test -- --coverage --watchAll=false --coverageReporters=lcov
+
+      - name: Validate lcov files
+        run: |
+          ls -1 backend/coverage-unit || true
+          ls -1 frontend/coverage || true
+          test -f backend/coverage-unit/lcov.info || echo "WARN: backend lcov.info ausente"
+          test -f frontend/coverage/lcov.info || echo "WARN: frontend lcov.info ausente"
+
+      - name: Merge lcov reports into combined-lcov.info
+        run: |
+          mkdir -p combined-coverage
+          BACKEND=backend/coverage-unit/lcov.info
+            FRONTEND=frontend/coverage/lcov.info
+          if [ -f "$BACKEND" ] && [ -f "$FRONTEND" ]; then
+            # Concat simples é suficiente porque os paths são distintos; Sonar deduplica
+            { echo "TN:"; cat "$BACKEND"; echo "TN:"; cat "$FRONTEND"; } > combined-coverage/combined-lcov.info
+            echo "Merged lcov -> combined-coverage/combined-lcov.info"
+          elif [ -f "$BACKEND" ]; then
+            cp "$BACKEND" combined-coverage/combined-lcov.info
+            echo "Only backend lcov present"
+          elif [ -f "$FRONTEND" ]; then
+            cp "$FRONTEND" combined-coverage/combined-lcov.info
+            echo "Only frontend lcov present"
+          else
+            echo "ERROR: nenhum lcov encontrado; abortando para evitar enviar cobertura 0" >&2
+            exit 1
+          fi
+          ls -l combined-coverage || true
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ env.SONAR_ORG }}
+            -Dsonar.sources=backend/src,frontend/src
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-unit/**,frontend/build/**
+            -Dsonar.javascript.lcov.reportPaths=combined-coverage/combined-lcov.info
+            -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.tsx,**/__tests__/**,**/tests/**
+            -Dsonar.sourceEncoding=UTF-8
+
+      - name: Quality Gate Status (API)
+        if: always()
+        run: |
+          echo "Para status da Quality Gate em PR, o SonarCloud adiciona check automaticamente."
