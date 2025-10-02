@@ -35,10 +35,10 @@ jobs:
       - name: Run Backend Tests (unit + integration)
         working-directory: backend
         run: |
-          # json-summary é um coverageReporter, não um test reporter. Ajustado para garantir geração de coverage-summary.json
-          npx jest --config jest.config.unit.js --coverage --coverageDirectory coverage-unit --reporters=default \
+          # Usar script npm para manter consistência (respeita jest.config.unit.js). Adiciona coverageReporters.
+          npm test -- --coverageDirectory coverage-unit \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
-          if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js; fi
+          if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js --runInBand; fi
       - name: Upload Backend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -68,8 +68,9 @@ jobs:
         env:
           CI: true
         run: |
-          # Ajuste: usar coverageReporters para json-summary em vez de test reporter
-          npx jest --coverage --coverageDirectory coverage --reporters=default \
+          # Usar react-scripts test para aproveitar configuração TS/Babel embutida e evitar erro de parsing do 'as' TypeScript.
+          # Adicionamos coverageReporters extras para garantir geração de json-summary.
+          npm test -- --watchAll=false --coverage \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
