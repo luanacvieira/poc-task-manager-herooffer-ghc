@@ -159,7 +159,7 @@ jobs:
           AVG=$(node -e "const d=require('./combined-coverage/coverage-badge.json');process.stdout.write(d.message)")
           echo "### Coverage Badge" >> $GITHUB_STEP_SUMMARY
           echo "Cobertura média combinada: ${AVG}" >> $GITHUB_STEP_SUMMARY
-          echo "Para publicar um badge público: publicar coverage-badge.json (ex: branch gh-pages) e usar shields.io: https://img.shields.io/endpoint?url=<RAW-URL>" >> $GITHUB_STEP_SUMMARY
+          echo "Badges publicados na branch 'badges' (endpoints raw + shields)." >> $GITHUB_STEP_SUMMARY
           echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
       - name: Publish Coverage Badge to gh-pages (all branches)
         env:
@@ -193,10 +193,29 @@ jobs:
           # Badge específico da branch sanitizada
           cp /tmp/coverage-badge.json "badges/coverage-badge-${SAFE_BRANCH}.json"
           if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json "badges/coverage-gate-badge-${SAFE_BRANCH}.json"; fi
+          # Histórico de cobertura (global e por branch)
+          mkdir -p badges/history
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          AVG_VAL=$(node -e "const d=require('/tmp/coverage-badge.json');process.stdout.write(d.message.replace('%',''))")
+          echo "{\"timestamp\":\"$TIMESTAMP\",\"branch\":\"$HEAD_BRANCH\",\"safeBranch\":\"$SAFE_BRANCH\",\"coverage\":$AVG_VAL}" > /tmp/history-entry.json
+          # Atualiza arquivo global
+          if [ -f badges/history/coverage-history.json ]; then
+            node -e "const fs=require('fs');const f='badges/history/coverage-history.json';let arr=[];try{arr=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(arr))arr=[];}catch(e){};const entry=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));arr.push(entry);if(arr.length>500)arr=arr.slice(-500);fs.writeFileSync(f,JSON.stringify(arr,null,2));"
+          else
+            cp /tmp/history-entry.json badges/history/coverage-history.json
+          fi
+          # Histórico específico da branch
+          if [ -f badges/history/coverage-history-${SAFE_BRANCH}.json ]; then
+            node -e "const fs=require('fs');const f='badges/history/coverage-history-${SAFE_BRANCH}.json';let arr=[];try{arr=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(arr))arr=[];}catch(e){};const entry=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));arr.push(entry);if(arr.length>200)arr=arr.slice(-200);fs.writeFileSync(f,JSON.stringify(arr,null,2));"
+          else
+            cp /tmp/history-entry.json badges/history/coverage-history-${SAFE_BRANCH}.json
+          fi
+          # Último snapshot por branch
+          cp /tmp/history-entry.json badges/history/coverage-latest-${SAFE_BRANCH}.json
           echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add badges/*.json
+          git add badges/*.json badges/history/*.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No badge changes to commit";
           else
@@ -240,8 +259,10 @@ jobs:
           echo "![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=coverage)" >> /tmp/_badge_block.md
           echo "![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=bugs)" >> /tmp/_badge_block.md
           echo "![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=vulnerabilities)" >> /tmp/_badge_block.md
-            echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
+          echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
           echo "![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=sqale_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=reliability_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=security_rating)" >> /tmp/_badge_block.md
           echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
           if grep -q 'BADGES-AUTO-START' README.md; then
             sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
