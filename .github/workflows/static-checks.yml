@@ -1,0 +1,55 @@
+name: Static Checks
+
+on:
+  push:
+    branches: [ develop, master ]
+  pull_request:
+    branches: [ develop, master ]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20.x
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci || npm install
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: ESLint Backend
+        working-directory: backend
+        run: npx eslint .
+      - name: ESLint Frontend
+        working-directory: frontend
+        run: npx eslint src --max-warnings=0 || npx eslint src
+
+  typecheck:
+    name: Type Check (Frontend)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: TypeScript Check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+# Próximos workflows (Tests and Coverage, CodeQL) vão disparar via workflow_run após sucesso deste.
