@@ -1,0 +1,15 @@
+name: CI Unified (DEPRECATED - OLD)
+
+# Renamed to ci-unified.old.yml apenas para marcar para remoção manual futura.
+# Seguro remover este arquivo. Não participa mais da cadeia de CI.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecation Notice
+        run: |
+          echo 'Deprecated workflow (old). Safe to delete this file: ci-unified.old.yml.'
