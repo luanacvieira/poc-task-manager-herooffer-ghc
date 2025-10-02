@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: ["Test and Coverage Check"]
     types: [completed]
+  # Execução manual direta do Build (debug / inspeção independente)
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,12 +16,12 @@ env:
 jobs:
   build-backend:
     name: Build Backend
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -48,7 +50,7 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [build-backend]
     steps:
