@@ -2,11 +2,13 @@
 
 ## Status & Qualidade
 
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge.json)
+
 | Métrica | Valor (último run CI/CD) |
 |---------|--------------------------|
-| Cobertura (Combined) | (gerada em runtime no summary do workflow) |
+| Cobertura (Combined) | Exibida acima (badge) + summary do workflow |
 
-Para exibir um badge dinâmico futuramente, podemos publicar `combined-coverage/combined-coverage-summary.json` em uma branch `gh-pages` ou usar GitHub Shields com endpoint JSON. (Ver seção "Badge de Cobertura" abaixo.)
+O badge é gerado automaticamente pelo workflow "Test and Coverage Check" (job `coverage-gate`) e publicado na branch `gh-pages` em `badges/coverage-badge.json`. Também são publicados arquivos específicos por branch: `coverage-badge-develop.json` e `coverage-badge-master.json`.
 
 ## Estratégia de Testes
 
@@ -86,13 +88,36 @@ git config core.hooksPath .githooks
 chmod +x .githooks/pre-push
 ```
 
-## Badge de Cobertura (Plano Futuro)
-1. Adicionar passo no workflow para extrair porcentagem combined e gerar `coverage-badge.json`.
-2. Publicar via GitHub Pages ou Action `peaceiris/actions-gh-pages` em pasta com JSON.
-3. Usar Shields: `https://img.shields.io/endpoint?url=<raw-json-url>`.
+## Badge de Cobertura (Automatizado)
+Pipeline já implementada.
 
-Estrutura do JSON esperada pelo Shields:
+Arquivos publicados (branch `gh-pages`):
+- `badges/coverage-badge.json` (última média combinada)
+- `badges/coverage-badge-develop.json`
+- `badges/coverage-badge-master.json`
+
+Formato (`coverage-badge.json`):
+```json
+{ "schemaVersion": 1, "label": "coverage", "message": "88.42%", "color": "green" }
 ```
-{ "schemaVersion": 1, "label": "coverage", "message": "85%", "color": "yellowgreen" }
-```
+O valor real e a cor são definidos dinamicamente conforme thresholds (>=90 brightgreen, >=80 green, senão orange).
+
+### Como validar após merge
+1. Fazer merge/commit em `develop` ou `master`.
+2. Aguardar execução: Static Checks → Test and Coverage Check → Build.
+3. Verificar em *Actions* que `coverage-gate` terminou com sucesso.
+4. Trocar para a branch `gh-pages` no GitHub (Code > switch branch) e abrir `badges/coverage-badge.json` (deve conter campos `schemaVersion`, `label`, `message`, `color`).
+5. Conferir o badge no README atualizando a página (pode haver cache de até ~5 min no Shields; acrescentar query `?cacheSeconds=60` se necessário).
+
+### Exemplos de URLs
+Badge principal: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge.json`
+
+Badge develop: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge-develop.json`
+
+Badge master: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge-master.json`
+
+### Problemas comuns
+- Badge não atualiza: confirmar se branch protegida rodou workflow e se commit alterou cobertura (senão sem push em gh-pages).
+- Cor inesperada: verificar média (arquivo `coverage-badge.json`) e thresholds.
+- 404 no raw: primeiro merge ainda não rodou/gerou branch `gh-pages`.
 
