@@ -1,13 +1,10 @@
 name: SonarCloud Analysis
 
 on:
+  # Option A+E: Execute ONLY after the coverage workflow finishes (any branch) or manually.
   workflow_run:
     workflows: ["Test and Coverage Check"]
     types: [completed]
-  pull_request:
-    branches: [ master, develop ]
-  push:
-    branches: [ master, develop ]
   workflow_dispatch:
 
 permissions:
@@ -23,11 +20,10 @@ jobs:
   sonar:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
+    # Only run via workflow_run (successful) or manual dispatch.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-          github.event_name == 'push' }}
+          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +39,7 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
 
-      # Download coverage artifacts gerados no workflow anterior (caso workflow_run)
+      # Download coverage artifacts gerados no workflow anterior (workflow_run path)
       - name: Download backend coverage artifact
         if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v4
@@ -58,26 +54,11 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage
 
-      # Se for PR ou push direto (fora da cadeia) gerar coverage rapidamente
-      - name: Install backend deps (fallback)
-        if: ${{ github.event_name != 'workflow_run' }}
-        working-directory: backend
-        run: npm ci || npm install
-      - name: Run backend unit coverage (fallback)
-        if: ${{ github.event_name != 'workflow_run' }}
-        working-directory: backend
-        run: npx jest --config jest.config.unit.js --coverage --coverageReporters=lcov --coverageDirectory coverage-unit --silent
-
-      - name: Install frontend deps (fallback)
-        if: ${{ github.event_name != 'workflow_run' }}
-        working-directory: frontend
-        run: npm ci || npm install
-      - name: Run frontend coverage (fallback)
-        if: ${{ github.event_name != 'workflow_run' }}
-        working-directory: frontend
-        env:
-          CI: true
-        run: npm test -- --coverage --watchAll=false --coverageReporters=lcov
+      - name: Assert artifacts presence (manual dispatch note)
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "[INFO] Manual dispatch: expecting existing coverage artifacts committed previously."
+          fi
 
       - name: Validate lcov files
         run: |
