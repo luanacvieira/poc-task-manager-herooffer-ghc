@@ -124,6 +124,8 @@ jobs:
           fs.writeFileSync('combined-coverage/combined-coverage-summary.json', JSON.stringify(result,null,2));
           const badge = { schemaVersion:1, label:'coverage', message: avg+'%', color: parseFloat(avg)>=90?'brightgreen':(parseFloat(avg)>=80?'green':'orange') };
           fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify(badge));
+          const gateBadge = { schemaVersion:1, label:'coverage gate', message:'pass', color:'success' };
+          fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify(gateBadge));
           console.log('Coverage gate passed. Average coverage:', avg+'%');
           EOF
       - name: Upload Combined Coverage
@@ -136,12 +138,18 @@ jobs:
         with:
           name: coverage-badge
           path: combined-coverage/coverage-badge.json
+      - name: Upload Coverage Gate Badge JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-gate-badge
+          path: combined-coverage/coverage-gate-badge.json
       - name: Coverage Summary Output
         run: |
           AVG=$(node -e "const d=require('./combined-coverage/coverage-badge.json');process.stdout.write(d.message)")
           echo "### Coverage Badge" >> $GITHUB_STEP_SUMMARY
           echo "Cobertura média combinada: ${AVG}" >> $GITHUB_STEP_SUMMARY
           echo "Para publicar um badge público: publicar coverage-badge.json (ex: branch gh-pages) e usar shields.io: https://img.shields.io/endpoint?url=<RAW-URL>" >> $GITHUB_STEP_SUMMARY
+          echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
       - name: Publish Coverage Badge to gh-pages
         if: ${{ github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'master' }}
         env:
@@ -160,9 +168,16 @@ jobs:
           fi
           mkdir -p badges
           cp "$SRC_BADGE" badges/coverage-badge.json
+          # Gate badge
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
           # Nome específico da branch
           if [ "$HEAD_BRANCH" = "develop" ]; then cp "$SRC_BADGE" badges/coverage-badge-develop.json; fi
           if [ "$HEAD_BRANCH" = "master" ]; then cp "$SRC_BADGE" badges/coverage-badge-master.json; fi
+          # Gate badge por branch
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then
+            if [ "$HEAD_BRANCH" = "develop" ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-develop.json; fi
+            if [ "$HEAD_BRANCH" = "master" ]; then cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-master.json; fi
+          fi
           # Index opcional
           echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
           git config user.name "github-actions"
