@@ -1,11 +1,9 @@
 name: CodeQL
 
 on:
-  # Roda análise apenas depois que os workflows de testes concluírem com sucesso
   workflow_run:
-    workflows: ["Test and Coverage Check", "CI/CD"]
+    workflows: ["Build"]
     types: [completed]
-  # Mantém execução programada semanal para varredura periódica independente
   schedule:
     - cron: '0 4 * * 1'
 
@@ -19,11 +17,10 @@ concurrency:
 
 jobs:
   analyze:
-    # Só roda se: (workflow_run bem sucedido) OU (execução programada)
     if: >-
       ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     name: CodeQL Analyze (${{ matrix.language }})
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -37,18 +34,36 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/checkout@v4
         with:
-            ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Setup Node (cache)
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
       - name: Checkout (scheduled)
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/checkout@v4
+      - name: Setup Node (cache - scheduled)
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # queries: security-extended,security-and-quality
+          queries: security-extended,security-and-quality
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
@@ -67,7 +82,4 @@ jobs:
             echo "CodeQL analysis failed" >&2; exit 1; fi
           echo "All security checks passed."
 
-# Notes:
-# - Branch Protection: exigir o check "CodeQL Gate" + os checks de testes/cobertura.
-# - Este workflow agora dispara somente após sucesso dos workflows de testes (workflow_run) ou via schedule semanal.
-# - Concurrency evita execuções duplicadas para o mesmo commit quando ambos workflows de teste finalizam quase juntos.
+# Branch Protection: exigir Lint, Type Check (Frontend), Test Backend, Test Frontend, Coverage Gate (>=80%), CodeQL Gate.
