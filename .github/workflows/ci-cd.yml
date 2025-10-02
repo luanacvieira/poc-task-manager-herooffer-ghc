@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   NODE_VERSION: 20.x
@@ -16,7 +16,6 @@ env:
 jobs:
   build-backend:
     name: Build Backend
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,11 +37,11 @@ jobs:
           sleep 2
           echo "Backend started (smoke)."
       - name: Archive backend (if packaging desired)
-        if: success()
+        if: always()
         run: |
           tar -czf backend-dist.tar.gz backend/src package.json backend/package.json || true
       - name: Upload backend artifact
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-artifact-${{ github.event.workflow_run.head_sha }}
@@ -50,13 +49,12 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [build-backend]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -70,7 +68,7 @@ jobs:
         run: |
           if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
       - name: Upload frontend build artifact
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build-${{ github.event.workflow_run.head_sha }}
@@ -80,4 +78,52 @@ jobs:
         run: |
           if [ -d frontend/build ]; then echo "\n### Frontend Build Output Size" >> $GITHUB_STEP_SUMMARY; du -sh frontend/build | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY; fi
 
-# Este workflow só roda após passar por testes e cobertura.
+  publish-build-badge:
+    name: Publish Build Badge
+    needs: [build-backend, build-frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare gh-pages branch workspace
+        shell: bash
+        run: |
+          set -e
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            # remove everything (since orphan)
+            find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + || true
+          fi
+          mkdir -p badges
+      - name: Generate build status badge
+        shell: bash
+        run: |
+          BACKEND_RESULT='${{ needs.build-backend.result }}'
+            FRONTEND_RESULT='${{ needs.build-frontend.result }}'
+          STATUS=fail
+          COLOR=red
+          if [ "$BACKEND_RESULT" = "success" ] && [ "$FRONTEND_RESULT" = "success" ]; then
+            STATUS=pass
+            COLOR=brightgreen
+          fi
+          SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/:' '--')
+          cat > badges/build-status-badge.json <<EOF
+          { "schemaVersion": 1, "label": "build", "message": "$STATUS", "color": "$COLOR" }
+          EOF
+          cp badges/build-status-badge.json "badges/build-status-badge-${SAFE_BRANCH}.json"
+          echo "Generated badges for branch name ${GITHUB_REF_NAME} (safe: ${SAFE_BRANCH})"
+      - name: Commit & push badge
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add badges/build-status-badge*.json
+          git commit -m "chore(ci): update build status badge for ${GITHUB_REF_NAME} (${GITHUB_SHA:0:7})" || echo "No changes to commit"
+          git push origin gh-pages
+
+# Este workflow agora publica também badge de status de build.
