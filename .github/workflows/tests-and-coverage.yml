@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: backend/coverage-unit/coverage-summary.json
+          path: backend/coverage-unit/
 
   test-frontend:
     name: Test Frontend
@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: frontend/coverage/coverage-summary.json
+          path: frontend/coverage/
 
   coverage-gate:
     name: Coverage Gate (>=80%)
@@ -163,7 +163,7 @@ jobs:
           echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
       - name: Publish Coverage Badge to gh-pages (all branches)
         env:
-          BADGE_BRANCH: gh-pages
+          BADGE_BRANCH: badges
           SRC_BADGE: combined-coverage/coverage-badge.json
           # Para workflow_dispatch não existe event.workflow_run -> fallback para ref_name
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
@@ -201,9 +201,12 @@ jobs:
             echo "No badge changes to commit";
           else
             git commit -m "chore: update coverage badges ($HEAD_BRANCH)"
-            git push origin HEAD:$BADGE_BRANCH
-            echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
-            echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
+            if git push origin HEAD:$BADGE_BRANCH; then
+              echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
+              echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "WARNING: push to $BADGE_BRANCH failed (likely branch protection). Continuing without failing pipeline." >&2
+            fi
           fi
 
   update-readme-badges:
@@ -223,7 +226,7 @@ jobs:
         run: |
           set -e
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
-          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/gh-pages/badges"
+          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/badges/badges"
           BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
           COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
           COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
@@ -231,6 +234,14 @@ jobs:
           echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_BRANCH_URL})" >> /tmp/_badge_block.md
           echo "![Coverage (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
           echo "![Coverage Gate (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+          # Badges SonarCloud (podem aparecer como 'pending' até a primeira análise)
+          SONAR_PROJECT_KEY="github_poc-task-manager-herooffer-ghc"
+          echo "![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=alert_status)" >> /tmp/_badge_block.md
+          echo "![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=coverage)" >> /tmp/_badge_block.md
+          echo "![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=bugs)" >> /tmp/_badge_block.md
+          echo "![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=vulnerabilities)" >> /tmp/_badge_block.md
+            echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
+          echo "![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=sqale_rating)" >> /tmp/_badge_block.md
           echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
           if grep -q 'BADGES-AUTO-START' README.md; then
             sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
