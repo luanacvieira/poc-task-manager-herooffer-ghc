@@ -25,6 +25,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
         run: npm ci || npm install
@@ -59,6 +60,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci || npm install
