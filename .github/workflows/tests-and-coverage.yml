@@ -4,11 +4,10 @@ on:
   workflow_run:
     workflows: ["Static Checks"]
     types: [completed]
-  # Disparo manual opcional para regenerar badge de cobertura
   workflow_dispatch:
 
 permissions:
-  contents: write  # necessário para publicar badge em gh-pages
+  contents: write
 
 env:
   NODE_VERSION: 20.x
@@ -19,12 +18,10 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (tested commit)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -35,7 +32,6 @@ jobs:
       - name: Run Backend Tests (unit + integration)
         working-directory: backend
         run: |
-          # json-summary é um coverageReporter, não um test reporter. Ajustado para garantir geração de coverage-summary.json
           npx jest --config jest.config.unit.js --coverage --coverageDirectory coverage-unit --reporters=default \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
           if [ -f jest.config.integration.js ]; then npx jest --config jest.config.integration.js; fi
@@ -50,12 +46,10 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (tested commit)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -68,7 +62,6 @@ jobs:
         env:
           CI: true
         run: |
-          # Usar react-scripts para garantir Babel/TypeScript transform corretos
           npm test -- --coverage --watchAll=false \
             --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
       - name: Upload Frontend Coverage
@@ -84,8 +77,7 @@ jobs:
     if: >-
       ${{ always() && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
     steps:
-      - name: Checkout (tested commit)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Download Coverage Artifacts
@@ -107,7 +99,6 @@ jobs:
             process.exit(1);
           }
           const b = JSON.parse(fs.readFileSync(backendPath,'utf8'));
-            
           const f = JSON.parse(fs.readFileSync(frontendPath,'utf8'));
           function mergeMetric(a,b){return { total:a.total + b.total, covered:a.covered + b.covered, skipped:(a.skipped||0)+(b.skipped||0) };}
           const metrics = Object.keys(b.total);
@@ -143,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: combined-coverage
-          path: combined-coverage/combined-coverage-summary.json
+          path: combined-coverage
       - name: Upload Coverage Badge JSON
         uses: actions/upload-artifact@v4
         with:
@@ -159,73 +150,53 @@ jobs:
           AVG=$(node -e "const d=require('./combined-coverage/coverage-badge.json');process.stdout.write(d.message)")
           echo "### Coverage Badge" >> $GITHUB_STEP_SUMMARY
           echo "Cobertura média combinada: ${AVG}" >> $GITHUB_STEP_SUMMARY
-          echo "Badges publicados na branch 'badges' (endpoints raw + shields)." >> $GITHUB_STEP_SUMMARY
-          echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
-      - name: Publish Coverage Badge to gh-pages (all branches)
+          echo "Badges e histórico publicados na branch 'badges'." >> $GITHUB_STEP_SUMMARY
+      - name: Publish Coverage + History Badges (all branches)
         env:
           BADGE_BRANCH: badges
-          SRC_BADGE: combined-coverage/coverage-badge.json
-          # Para workflow_dispatch não existe event.workflow_run -> fallback para ref_name
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           set -euo pipefail
-          echo "Publishing coverage badge for branch '$HEAD_BRANCH' to '$BADGE_BRANCH'"
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
-          # Salvar cópias temporárias ANTES de possivelmente limpar working tree (orphan)
-          cp "$SRC_BADGE" /tmp/coverage-badge.json
-          if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json /tmp/coverage-gate-badge.json; fi
-
           git fetch origin $BADGE_BRANCH || true
           if git show-ref --verify --quiet refs/remotes/origin/$BADGE_BRANCH; then
             git checkout $BADGE_BRANCH
             git reset --hard origin/$BADGE_BRANCH
           else
             git checkout --orphan $BADGE_BRANCH
-            # Limpa apenas arquivos rastreados; evita apagar o que salvamos em /tmp
             git rm -rf . 2>/dev/null || true
             rm -rf * .[^.]* 2>/dev/null || true
           fi
-
-          mkdir -p badges
-          # Badge genérico sobrescreve sempre (última execução em qualquer branch)
-          cp /tmp/coverage-badge.json badges/coverage-badge.json
-          if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
-          # Badge específico da branch sanitizada
-          cp /tmp/coverage-badge.json "badges/coverage-badge-${SAFE_BRANCH}.json"
-          if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json "badges/coverage-gate-badge-${SAFE_BRANCH}.json"; fi
-          # Histórico de cobertura (global e por branch)
           mkdir -p badges/history
+          cp combined-coverage/coverage-badge.json badges/coverage-badge.json
+          cp combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
+          fi
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          AVG_VAL=$(node -e "const d=require('/tmp/coverage-badge.json');process.stdout.write(d.message.replace('%',''))")
+          AVG_VAL=$(node -e "const d=require('./combined-coverage/coverage-badge.json');process.stdout.write(d.message.replace('%',''))")
           echo "{\"timestamp\":\"$TIMESTAMP\",\"branch\":\"$HEAD_BRANCH\",\"safeBranch\":\"$SAFE_BRANCH\",\"coverage\":$AVG_VAL}" > /tmp/history-entry.json
-          # Atualiza arquivo global
           if [ -f badges/history/coverage-history.json ]; then
-            node -e "const fs=require('fs');const f='badges/history/coverage-history.json';let arr=[];try{arr=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(arr))arr=[];}catch(e){};const entry=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));arr.push(entry);if(arr.length>500)arr=arr.slice(-500);fs.writeFileSync(f,JSON.stringify(arr,null,2));"
+            node -e "const fs=require('fs');const f='badges/history/coverage-history.json';let a=[];try{a=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(a))a=[];}catch(e){};const e=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));a.push(e);if(a.length>500)a=a.slice(-500);fs.writeFileSync(f,JSON.stringify(a,null,2));"
           else
             cp /tmp/history-entry.json badges/history/coverage-history.json
           fi
-          # Histórico específico da branch
           if [ -f badges/history/coverage-history-${SAFE_BRANCH}.json ]; then
-            node -e "const fs=require('fs');const f='badges/history/coverage-history-${SAFE_BRANCH}.json';let arr=[];try{arr=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(arr))arr=[];}catch(e){};const entry=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));arr.push(entry);if(arr.length>200)arr=arr.slice(-200);fs.writeFileSync(f,JSON.stringify(arr,null,2));"
+            node -e "const fs=require('fs');const f='badges/history/coverage-history-${SAFE_BRANCH}.json';let a=[];try{a=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(a))a=[];}catch(e){};const e=JSON.parse(fs.readFileSync('/tmp/history-entry.json','utf8'));a.push(e);if(a.length>200)a=a.slice(-200);fs.writeFileSync(f,JSON.stringify(a,null,2));"
           else
             cp /tmp/history-entry.json badges/history/coverage-history-${SAFE_BRANCH}.json
           fi
-          # Último snapshot por branch
           cp /tmp/history-entry.json badges/history/coverage-latest-${SAFE_BRANCH}.json
-          echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
+          echo '{"info":"Coverage badge files"}' > badges/index.json
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add badges/*.json badges/history/*.json 2>/dev/null || true
+          git add badges/*.json badges/history/*.json || true
           if git diff --cached --quiet; then
-            echo "No badge changes to commit";
+            echo "No badge changes";
           else
-            git commit -m "chore: update coverage badges ($HEAD_BRANCH)"
-            if git push origin HEAD:$BADGE_BRANCH; then
-              echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
-              echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "WARNING: push to $BADGE_BRANCH failed (likely branch protection). Continuing without failing pipeline." >&2
-            fi
+            git commit -m "chore(badges): update coverage + history ($HEAD_BRANCH)"
+            git push origin HEAD:$BADGE_BRANCH || echo "WARN: push blocked"
           fi
 
   update-readme-badges:
@@ -234,58 +205,52 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Checkout tested commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Update README badge block
+      - name: Update README badge block (dynamic branch)
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           set -e
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
-          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/badges/badges"
-          BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
-          COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
-          COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
-          echo "<!-- BADGES-AUTO-START -->" > /tmp/_badge_block.md
-          echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_BRANCH_URL})" >> /tmp/_badge_block.md
-          echo "![Coverage (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
-          echo "![Coverage Gate (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
-          # Badges SonarCloud (podem aparecer como 'pending' até a primeira análise)
-          SONAR_PROJECT_KEY="github_poc-task-manager-herooffer-ghc"
-          echo "![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=alert_status)" >> /tmp/_badge_block.md
-          echo "![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=coverage)" >> /tmp/_badge_block.md
-          echo "![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=bugs)" >> /tmp/_badge_block.md
-          echo "![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=vulnerabilities)" >> /tmp/_badge_block.md
-          echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
-          echo "![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=sqale_rating)" >> /tmp/_badge_block.md
-          echo "![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=reliability_rating)" >> /tmp/_badge_block.md
-          echo "![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=security_rating)" >> /tmp/_badge_block.md
-          echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
+          BADGES_URL="https://raw.githubusercontent.com/${REPO}/badges/badges"
+          BUILD_URL="${BADGES_URL}/build-status-badge-${SAFE_BRANCH}.json"
+          COV_URL="${BADGES_URL}/coverage-badge-${SAFE_BRANCH}.json"
+          GATE_URL="${BADGES_URL}/coverage-gate-badge-${SAFE_BRANCH}.json"
+          echo "<!-- BADGES-AUTO-START -->" > /tmp/_badges.md
+          echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_URL})" >> /tmp/_badges.md
+          echo "![Coverage (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COV_URL})" >> /tmp/_badges.md
+          echo "![Coverage Gate (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${GATE_URL})" >> /tmp/_badges.md
+          SONAR_KEY="github_poc-task-manager-herooffer-ghc"
+          for metric in alert_status coverage bugs vulnerabilities code_smells sqale_rating reliability_rating security_rating; do
+            case $metric in
+              alert_status) label="Sonar Quality Gate";;
+              coverage) label="Sonar Coverage";;
+              bugs) label="Sonar Bugs";;
+              vulnerabilities) label="Sonar Vulnerabilities";;
+              code_smells) label="Sonar Code Smells";;
+              sqale_rating) label="Sonar Maintainability";;
+              reliability_rating) label="Sonar Reliability";;
+              security_rating) label="Sonar Security";;
+            esac
+            echo "![${label}](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_KEY}&metric=${metric})" >> /tmp/_badges.md
+          done
+          echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badges.md
           if grep -q 'BADGES-AUTO-START' README.md; then
             sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
-            if grep -n '^# ' README.md >/dev/null; then
-              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
-            else
-              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
-            fi
+          fi
+          if grep -n '^# ' README.md >/dev/null; then
+            awk 'NR==1{print; system("cat /tmp/_badges.md"); next} {print}' README.md > README.new && mv README.new README.md
           else
-            if grep -n '^# ' README.md >/dev/null; then
-              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
-            else
-              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
-            fi
+            cat /tmp/_badges.md README.md > README.new && mv README.new README.md
           fi
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add README.md || true
           if git diff --cached --quiet; then
-            echo "README unchanged"
-          else
-            git commit -m "docs(badges): update README badges block for ${HEAD_BRANCH}" || true
-          fi
+            echo "README unchanged"; else git commit -m "docs(badges): update dynamic badges block (${HEAD_BRANCH})" || true; fi
       - name: Push README update
         if: success()
         run: |
