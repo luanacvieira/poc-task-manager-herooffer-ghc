@@ -19,10 +19,7 @@ jobs:
   sonar:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
-    # Only run via workflow_run (successful) or manual dispatch.
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,7 +35,7 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
 
-      # Download coverage artifacts gerados no workflow anterior (workflow_run path)
+      # Baixa artifacts gerados pelo workflow anterior
       - name: Download backend coverage artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
