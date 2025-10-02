@@ -33,6 +33,7 @@ bower_components
 
 # node-waf configuration
 .lock-wscript
+.wafpickle-*
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
@@ -41,10 +42,10 @@ build/Release
 node_modules/
 jspm_packages/
 
-# Lock files (uncomment package-lock.json if this is a development/personal project)
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+# Lock files agora serão versionados para builds determinísticos
+# (manter apenas se realmente quiser ignorar algum gerenciador específico)
+# yarn.lock
+# pnpm-lock.yaml
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/

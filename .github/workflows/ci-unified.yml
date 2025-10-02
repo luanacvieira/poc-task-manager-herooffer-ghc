@@ -1,0 +1,15 @@
+name: CI Unified (DEPRECATED)
+
+# This file is deprecated and retained only because automatic deletion failed.
+# Safe to delete: .github/workflows/ci-unified.yml
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecation Notice
+        run: |
+          echo 'Deprecated workflow. Remove file ci-unified.yml.'
