@@ -163,7 +163,7 @@ jobs:
           echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
       - name: Publish Coverage Badge to gh-pages (all branches)
         env:
-          BADGE_BRANCH: gh-pages
+          BADGE_BRANCH: badges
           SRC_BADGE: combined-coverage/coverage-badge.json
           # Para workflow_dispatch não existe event.workflow_run -> fallback para ref_name
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
@@ -201,9 +201,12 @@ jobs:
             echo "No badge changes to commit";
           else
             git commit -m "chore: update coverage badges ($HEAD_BRANCH)"
-            git push origin HEAD:$BADGE_BRANCH
-            echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
-            echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
+            if git push origin HEAD:$BADGE_BRANCH; then
+              echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
+              echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "WARNING: push to $BADGE_BRANCH failed (likely branch protection). Continuing without failing pipeline." >&2
+            fi
           fi
 
   update-readme-badges:
@@ -223,7 +226,7 @@ jobs:
         run: |
           set -e
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
-          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/gh-pages/badges"
+          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/badges/badges"
           BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
           COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
           COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
