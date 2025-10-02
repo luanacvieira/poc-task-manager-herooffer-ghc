@@ -90,6 +90,10 @@ jobs:
             echo "CodeQL analysis was skipped (upstream build not successful or condition unmet). Treating as neutral pass to not block PR."
             exit 0
           fi
+          if [ "$STATUS" = "cancelled" ]; then
+            echo "CodeQL analysis was cancelled (likely superseded by a newer commit due to concurrency). Treating as neutral so it does not block PRs."
+            exit 0
+          fi
           echo "CodeQL analysis status indicates failure: $STATUS" >&2
           exit 1
 
