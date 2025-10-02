@@ -161,8 +161,7 @@ jobs:
           echo "Cobertura média combinada: ${AVG}" >> $GITHUB_STEP_SUMMARY
           echo "Para publicar um badge público: publicar coverage-badge.json (ex: branch gh-pages) e usar shields.io: https://img.shields.io/endpoint?url=<RAW-URL>" >> $GITHUB_STEP_SUMMARY
           echo "Badge de gate (pass/fail) gerado: coverage-gate-badge.json" >> $GITHUB_STEP_SUMMARY
-      - name: Publish Coverage Badge to gh-pages
-        if: ${{ github.event.workflow_run.head_branch == 'develop' || github.event.workflow_run.head_branch == 'master' }}
+      - name: Publish Coverage Badge to gh-pages (all branches)
         env:
           BADGE_BRANCH: gh-pages
           SRC_BADGE: combined-coverage/coverage-badge.json
@@ -171,6 +170,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Publishing coverage badge for branch '$HEAD_BRANCH' to '$BADGE_BRANCH'"
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
           # Salvar cópias temporárias ANTES de possivelmente limpar working tree (orphan)
           cp "$SRC_BADGE" /tmp/coverage-badge.json
           if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json /tmp/coverage-gate-badge.json; fi
@@ -187,17 +187,12 @@ jobs:
           fi
 
           mkdir -p badges
+          # Badge genérico sobrescreve sempre (última execução em qualquer branch)
           cp /tmp/coverage-badge.json badges/coverage-badge.json
           if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge.json; fi
-
-          # Nome específico da branch
-          if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-develop.json; fi
-          if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-badge.json badges/coverage-badge-master.json; fi
-          # Gate badge por branch
-          if [ -f /tmp/coverage-gate-badge.json ]; then
-            if [ "$HEAD_BRANCH" = "develop" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-develop.json; fi
-            if [ "$HEAD_BRANCH" = "master" ]; then cp /tmp/coverage-gate-badge.json badges/coverage-gate-badge-master.json; fi
-          fi
+          # Badge específico da branch sanitizada
+          cp /tmp/coverage-badge.json "badges/coverage-badge-${SAFE_BRANCH}.json"
+          if [ -f /tmp/coverage-gate-badge.json ]; then cp /tmp/coverage-gate-badge.json "badges/coverage-gate-badge-${SAFE_BRANCH}.json"; fi
           echo '{"info":"Coverage badge files for shields.io endpoint"}' > badges/index.json
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -205,10 +200,63 @@ jobs:
           if git diff --cached --quiet; then
             echo "No badge changes to commit";
           else
-            git commit -m "chore: update coverage badge ($HEAD_BRANCH)"
+            git commit -m "chore: update coverage badges ($HEAD_BRANCH)"
             git push origin HEAD:$BADGE_BRANCH
             echo "Published coverage badge. Raw URL example: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json";
             echo "Shields example: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$BADGE_BRANCH/badges/coverage-badge.json" >> $GITHUB_STEP_SUMMARY
           fi
+
+  update-readme-badges:
+    name: Update README badges section
+    needs: [coverage-gate]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Update README badge block
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
+          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/gh-pages/badges"
+          BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
+          COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
+          COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
+          echo "<!-- BADGES-AUTO-START -->" > /tmp/_badge_block.md
+          echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_BRANCH_URL})" >> /tmp/_badge_block.md
+          echo "![Coverage (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
+          echo "![Coverage Gate (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+          echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
+          if grep -q 'BADGES-AUTO-START' README.md; then
+            sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          else
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          fi
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add README.md || true
+          if git diff --cached --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "docs(badges): update README badges block for ${HEAD_BRANCH}" || true
+          fi
+      - name: Push README update
+        if: success()
+        run: |
+          git push origin HEAD:${GITHUB_REF_NAME:-${{ github.event.workflow_run.head_branch }}} || echo "Push skipped"
 
 # Próximo workflow (Build) dispara via workflow_run.
