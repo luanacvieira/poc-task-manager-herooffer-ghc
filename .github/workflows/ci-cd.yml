@@ -111,11 +111,12 @@ jobs:
             STATUS=pass
             COLOR=brightgreen
           fi
+          SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/:' '--')
           cat > badges/build-status-badge.json <<EOF
           { "schemaVersion": 1, "label": "build", "message": "$STATUS", "color": "$COLOR" }
           EOF
-          BRANCH_FILE="badges/build-status-badge-${GITHUB_REF_NAME}.json"
-          cp badges/build-status-badge.json "$BRANCH_FILE"
+          cp badges/build-status-badge.json "badges/build-status-badge-${SAFE_BRANCH}.json"
+          echo "Generated badges for branch name ${GITHUB_REF_NAME} (safe: ${SAFE_BRANCH})"
       - name: Commit & push badge
         shell: bash
         run: |
