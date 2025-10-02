@@ -3,6 +3,8 @@
 ## Status & Qualidade
 
 ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge.json)
+![Coverage (develop)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge-develop.json)
+![Coverage (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/gh-pages/badges/coverage-badge-master.json)
 
 | Métrica | Valor (último run CI/CD) |
 |---------|--------------------------|
