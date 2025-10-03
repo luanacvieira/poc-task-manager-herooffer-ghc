@@ -69,4 +69,5 @@ jobs:
             echo "All endpoints responded 200." >> $GITHUB_STEP_SUMMARY
           else
             echo "One or more endpoints failed (see logs)." >> $GITHUB_STEP_SUMMARY
+          fi
 
