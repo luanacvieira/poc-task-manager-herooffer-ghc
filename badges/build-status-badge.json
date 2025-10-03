@@ -1,1 +1,1 @@
-{ "schemaVersion": 1, "label": "build", "message": "pass", "color": "brightgreen" }
+﻿{ "schemaVersion": 1, "label": "build", "message": "pending", "color": "lightgrey" }
