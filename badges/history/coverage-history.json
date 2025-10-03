@@ -904,5 +904,11 @@
     "branch": "dependabot/npm_and_yarn/backend/cross-env-10.1.0",
     "safeBranch": "dependabot-npm_and_yarn-backend-cross-env-10.1.0",
     "coverage": 95.32
+  },
+  {
+    "timestamp": "2025-10-03T22:15:07Z",
+    "branch": "feature/betterrole-with-tests1",
+    "safeBranch": "feature-betterrole-with-tests1",
+    "coverage": 95.32
   }
 ]
