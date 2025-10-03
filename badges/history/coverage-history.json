@@ -886,5 +886,11 @@
     "branch": "dependabot/npm_and_yarn/backend/dotenv-17.2.3",
     "safeBranch": "dependabot-npm_and_yarn-backend-dotenv-17.2.3",
     "coverage": 95.32
+  },
+  {
+    "timestamp": "2025-10-03T22:14:27Z",
+    "branch": "dependabot/npm_and_yarn/backend/mongoose-orm-7a0e69cb34",
+    "safeBranch": "dependabot-npm_and_yarn-backend-mongoose-orm-7a0e69cb34",
+    "coverage": 95.32
   }
 ]
