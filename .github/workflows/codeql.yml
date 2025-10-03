@@ -34,7 +34,7 @@ jobs:
     steps:
       - name: Checkout (workflow_run / manual)
         if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Setup Node (cache workflow_run / manual)
@@ -49,7 +49,7 @@ jobs:
 
       - name: Checkout (scheduled)
         if: ${{ github.event_name == 'schedule' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Node (cache - scheduled)
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/setup-node@v4
