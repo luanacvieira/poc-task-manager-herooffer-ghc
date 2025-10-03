@@ -1,0 +1,54 @@
+name: Auto-merge Dependabot minor/patch
+
+on:
+  pull_request:
+    types: [opened, labeled, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      contains(join(fromJson(toJson(github.event.pull_request.labels)).*.name, ','), 'automerge')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for context)
+        uses: actions/checkout@v4
+      - name: Check version bump type
+        id: bump
+        run: |
+          set -e
+          # Dependabot inclui no título algo como: Bump express from 4.17.1 to 4.18.2
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $TITLE"
+          if echo "$TITLE" | grep -Eoi ' to [0-9]+\.[0-9]+\.[0-9]+' >/dev/null; then
+            TO_VER=$(echo "$TITLE" | grep -Eoi ' to [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
+            FROM_VER=$(echo "$TITLE" | grep -Eoi ' from [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
+            echo "FROM=$FROM_VER TO=$TO_VER"
+            MAJOR_FROM=${FROM_VER%%.*}
+            MAJOR_TO=${TO_VER%%.*}
+            if [ "$MAJOR_FROM" != "$MAJOR_TO" ]; then
+              echo "major_change=true" >> $GITHUB_OUTPUT
+            else
+              echo "major_change=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "major_change=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Abort on major version bump
+        if: steps.bump.outputs.major_change == 'true'
+        run: echo "Detected major version bump; skipping auto-merge." && exit 0
+      - name: Enable GitHub auto-merge (rebase)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --rebase --auto "$PR_URL"
+      - name: Comment confirmation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr comment "$PR_URL" --body "Auto-merge enabled (minor/patch, label 'automerge')."
