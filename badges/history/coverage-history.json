@@ -898,5 +898,11 @@
     "branch": "dependabot/npm_and_yarn/backend/jest-environment-node-30.2.0",
     "safeBranch": "dependabot-npm_and_yarn-backend-jest-environment-node-30.2.0",
     "coverage": 95.32
+  },
+  {
+    "timestamp": "2025-10-03T22:14:42Z",
+    "branch": "dependabot/npm_and_yarn/backend/cross-env-10.1.0",
+    "safeBranch": "dependabot-npm_and_yarn-backend-cross-env-10.1.0",
+    "coverage": 95.32
   }
 ]
