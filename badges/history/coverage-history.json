@@ -802,5 +802,11 @@
     "branch": "master",
     "safeBranch": "master",
     "coverage": 95.32
+  },
+  {
+    "timestamp": "2025-10-03T22:12:19Z",
+    "branch": "87/merge",
+    "safeBranch": "87-merge",
+    "coverage": 95.32
   }
 ]
