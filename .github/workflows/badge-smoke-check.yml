@@ -1,0 +1,72 @@
+name: Badge Smoke Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # a cada 6 horas
+  workflow_dispatch:
+  push:
+    paths:
+      - 'README.md'
+      - '.github/workflows/tests-and-coverage.yml'
+      - '.github/workflows/ci-cd.yml'
+
+jobs:
+  verify-badges:
+    name: Verify badge endpoints (404 guard)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      REPO: ${{ github.repository }}
+      BADGE_BRANCH: badges
+      BRANCHES_TO_CHECK: master develop feature-betterrole-with-tests1
+    steps:
+      - name: Prepare URL list
+        id: gen
+        run: |
+          set -e
+          LIST_FILE=badge_urls.txt
+          : > $LIST_FILE
+          add(){ echo "$1" >> $LIST_FILE; }
+          # Global badges
+          add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-badge.json"
+          add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-gate-badge.json"
+          # Build generic may exist after build workflow
+          add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/build-status-badge.json"
+          # Per-branch badges
+          for B in $BRANCHES_TO_CHECK; do
+            SAFE=$(echo "$B" | tr '/:' '-')
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-badge-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-gate-badge-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/build-status-badge-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/history/coverage-history-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/history/coverage-latest-${SAFE}.json"
+          done
+          echo "urls=$(paste -sd ',' $LIST_FILE)" >> $GITHUB_OUTPUT
+      - name: Fetch & validate
+        run: |
+          set -e
+          IFS=',' read -r -a URLS <<< "${{ steps.gen.outputs.urls }}"
+          FAIL=0
+          for U in "${URLS[@]}"; do
+            echo "Checking $U";
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$U" || echo 000)
+            if [ "$STATUS" != "200" ]; then
+              echo "::error title=Badge missing::URL $U returned status $STATUS";
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -eq 1 ]; then
+            echo "One or more badge endpoints failed" >&2
+            exit 1
+          fi
+          echo "All badge endpoints ok";
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Badge Smoke Check" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "All endpoints responded 200." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "One or more endpoints failed (see logs)." >> $GITHUB_STEP_SUMMARY
+

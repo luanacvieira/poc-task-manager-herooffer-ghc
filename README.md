@@ -12,6 +12,8 @@
 ![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=sqale_rating)
 ![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=reliability_rating)
 ![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=security_rating)
+![Coverage (feature/betterrole-with-tests1)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-feature-betterrole-with-tests1.json)
+![Coverage Gate (feature/betterrole-with-tests1)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-feature-betterrole-with-tests1.json)
 <!-- BADGES-AUTO-END -->
 
 ## Status & Qualidade
