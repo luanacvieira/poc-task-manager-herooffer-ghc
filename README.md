@@ -22,6 +22,7 @@
 |---------|--------------------------|
 | Cobertura (Combined) | Ver badge acima + summary do workflow |
 | Histórico Cobertura | [coverage-history-master.json](https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/history/coverage-history-master.json) |
+| Visual (Gráfico) | `docs/coverage-history.html` (GitHub Pages após merge em master) |
 
 Os badges são publicados na branch `badges` em `badges/*.json` e `badges/history/*.json`. Cada branch gera seus próprios arquivos sanitizados (`coverage-badge-<safeBranch>.json`).
 
