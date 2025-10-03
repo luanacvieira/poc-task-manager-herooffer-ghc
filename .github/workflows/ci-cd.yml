@@ -19,7 +19,7 @@ jobs:
     name: Build Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-backend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
@@ -110,7 +110,7 @@ jobs:
             echo 'overall=failure' >> $GITHUB_OUTPUT
           fi
       - name: Checkout badges branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Update / create badge JSON
@@ -145,7 +145,7 @@ jobs:
     needs: [publish-build-badge]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
