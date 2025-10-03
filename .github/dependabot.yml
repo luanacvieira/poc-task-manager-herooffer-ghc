@@ -8,11 +8,10 @@ updates:
     directory: "/backend"           # Location of package.json
     schedule:
       interval: "daily"             # Daily keeps PR batch manageable; adjust to "weekly" if noisy
-      time: "06:00"                 # UTC time; choose early morning
-      timezone: "UTC"
-    allow:                           # (Optional) Explicit allowance examples (can expand later)
-      - dependency-type: "direct"    # Focus on direct first; transitive come via lockfile
-      - dependency-type: "all"       # Keep both (first direct ensures clarity; second covers remainder)
+      time: "03:00"                 # Local early morning (America/Sao_Paulo)
+      timezone: "America/Sao_Paulo"
+    allow:
+      - dependency-type: "direct"    # Limit noise: update direct deps (lockfile updates will still bring transitives)
     open-pull-requests-limit: 10
     versioning-strategy: increase
     rebase-strategy: auto
@@ -21,10 +20,10 @@ updates:
       - "backend"
       - "security"
     commit-message:
-      prefix: "deps(back)"
+      prefix: "deps:backend"
       include: "scope"
-    reviewers: []        # Add GitHub usernames if you want mandatory review
-    assignees: []
+  # reviewers: ["username1"]  # Uncomment and set if you want mandatory reviewers (Enterprise feature limitations may apply)
+  # assignees: ["username1"]  # Optional default assignees
     groups:              # Group related updates to reduce PR noise
       jest-testing:
         patterns:
@@ -52,8 +51,8 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "daily"
-      time: "06:10"                  # Stagger vs backend by a few minutes
-      timezone: "UTC"
+      time: "03:10"                  # Stagger vs backend
+      timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 10
     versioning-strategy: increase
     rebase-strategy: auto
@@ -61,7 +60,7 @@ updates:
       - "dependencies"
       - "frontend"
     commit-message:
-      prefix: "deps(front)"
+      prefix: "deps:frontend"
       include: "scope"
     groups:
       react-core:
@@ -94,33 +93,31 @@ updates:
     schedule:
       interval: "weekly"              # Weekly is usually enough for actions
       day: "monday"
-      time: "06:20"
-      timezone: "UTC"
+      time: "03:20"
+      timezone: "America/Sao_Paulo"
     labels:
       - "dependencies"
       - "ci"
     commit-message:
-      prefix: "deps(actions)"
+      prefix: "deps:actions"
       include: "scope"
     open-pull-requests-limit: 5
 
-  # 4. Security fixes only (optional extra pass). Dependabot security alerts will still open PRs automatically.
-  # If you want a dedicated security-only scanning run, you can duplicate an ecosystem with 'allow' filters.
-  # Example (COMMENTED OUT):
-  # - package-ecosystem: "npm"
-  #   directory: "/backend"
-  #   schedule:
-  #     interval: "daily"
-  #   allow:
-  #     - dependency-type: "direct"
-  #   labels: ["dependencies", "security", "backend"]
-  #   security-updates-only: true
+  # 4. (Comentado) Blocos específicos somente para updates de segurança foram removidos porque a validação local indicou chave 'security-updates-only' não suportada.
+  #    O GitHub ainda abrirá PRs de segurança via Dependabot Alerts automaticamente.
+  #    Caso seja liberado/suportado no plano atual, você pode reintroduzir blocos assim:
+  #  - package-ecosystem: "npm"
+  #    directory: "/backend"
+  #    schedule:
+  #      interval: "daily"
+  #    security-updates-only: true
+  #    labels: ["dependencies", "security", "backend"]
 
 # Notes / Rationale:
 # - Grouping reduces PR fatigue (especially for jest / lint / react ecosystems).
 # - Prefixes in commit messages help triage and enable optional automations.
 # - versioning-strategy: increase => allows minor/patch jumps; majors still raise PRs, not forced.
-# - You can enable auto-merge (see below) via a separate workflow reacting to labels like 'automerge'.
+# - You can enable auto-merge (implemented separately) reacting to labels or conditions.
 # - Adjust times to your timezone if desired.
 
 # Optional: create a separate workflow to automerge safe updates (minor/patch) when CI passes & label applied.
