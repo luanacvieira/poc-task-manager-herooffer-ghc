@@ -141,9 +141,9 @@ jobs:
           fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify(gateBadge));
           if(!pass){
             console.error('Coverage gate failed metrics: '+failures.join(', '));
-            process.exit(1);
+            fs.writeFileSync('combined-coverage/gate-failed','1');
           }
-          console.log('Coverage gate passed. Average coverage:', avg+'%');
+          console.log('Coverage gate passed OR recorded failure. Average coverage:', avg+'%');
           EOF
       - name: Upload Combined Coverage
         uses: actions/upload-artifact@v4
@@ -177,7 +177,7 @@ jobs:
           set -euo pipefail
           echo "Publishing coverage badge for branch '$HEAD_BRANCH' to '$BADGE_BRANCH'"
           SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '--')
-          # Salvar cópias temporárias ANTES de possivelmente limpar working tree (orphan)
+                fs.writeFileSync('combined-coverage/gate-failed','1');
           cp "$SRC_BADGE" /tmp/coverage-badge.json
           if [ -f combined-coverage/coverage-gate-badge.json ]; then cp combined-coverage/coverage-gate-badge.json /tmp/coverage-gate-badge.json; fi
 
@@ -296,5 +296,12 @@ jobs:
         if: success()
         run: |
           git push origin HEAD:${GITHUB_REF_NAME:-${{ github.event.workflow_run.head_branch }}} || echo "Push skipped"
+      - name: Fail if gate failed
+        if: always()
+        run: |
+          if [ -f combined-coverage/gate-failed ]; then
+            echo \"Coverage gate FAILED\" >&2
+            exit 1
+          fi
 
 # Próximo workflow (Build) dispara via workflow_run.
