@@ -98,7 +98,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Download Coverage Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: coverage-artifacts
       - name: Combine & Enforce Coverage + Generate Badges (pass/fail)
