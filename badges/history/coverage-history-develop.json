@@ -1,1 +1,8 @@
-{"timestamp":"2025-10-03T19:52:45Z","branch":"develop","safeBranch":"develop","coverage":95.32}
+[
+  {
+    "timestamp": "2025-10-03T19:53:49Z",
+    "branch": "develop",
+    "safeBranch": "develop",
+    "coverage": 95.32
+  }
+]
