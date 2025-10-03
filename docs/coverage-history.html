@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Histórico de Cobertura</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 1.5rem; background:#111; color:#eee; }
+    h1 { margin-top:0; }
+    canvas { max-width: 100%; }
+    .controls { margin-bottom:1rem; }
+    a { color:#4ea3ff; }
+    .badge-links { font-size: .85rem; margin-top:.5rem; }
+    .grid { display:grid; gap:2rem; }
+  </style>
+</head>
+<body>
+  <h1>Histórico de Cobertura</h1>
+  <p>Consumindo JSON direto da branch <code>badges</code>. Atualize após novos pipelines.</p>
+  <div class="controls">
+    Branch: <input id="branchInput" value="master" />
+    <button onclick="loadBranch()">Carregar</button>
+  </div>
+  <div class="grid">
+    <div>
+      <h2>Série Temporal</h2>
+      <canvas id="coverageChart" height="120"></canvas>
+    </div>
+    <div>
+      <h2>Últimos Pontos (tabela)</h2>
+      <table id="tbl" border="1" cellpadding="4" cellspacing="0">
+        <thead><tr><th>#</th><th>Timestamp (UTC)</th><th>Coverage %</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="badge-links">Raw master history: <a target="_blank" id="rawMaster"></a></p>
+  <script>
+    const repo = 'luanacvieira/poc-task-manager-herooffer-ghc';
+    const base = `https://raw.githubusercontent.com/${repo}/badges/badges/history`;
+    const ctx = document.getElementById('coverageChart').getContext('2d');
+    let chart;
+
+    function format(ts){ return new Date(ts).toLocaleString(); }
+
+    async function fetchJson(url){
+      const r = await fetch(url, { cache:'no-store' });
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function buildChart(data, branch){
+      const labels = data.map(d=>format(d.timestamp));
+      const values = data.map(d=>d.coverage);
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type:'line',
+        data:{ labels, datasets:[{ label:`Coverage % (${branch})`, data:values, borderColor:'#4ea3ff', backgroundColor:'rgba(78,163,255,.15)', tension:.25, fill:true }]},
+        options:{
+          scales:{ y:{ beginAtZero:true, suggestedMax:100 } },
+          plugins:{ legend:{ labels:{ color:'#eee' } } },
+        }
+      });
+    }
+
+    function fillTable(data){
+      const tbody = document.querySelector('#tbl tbody');
+      tbody.innerHTML = '';
+      [...data].slice(-25).reverse().forEach((row,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${row.timestamp}</td><td>${row.coverage.toFixed(2)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadBranch(){
+      const branch = document.getElementById('branchInput').value.trim();
+      const safe = branch.replace(/[\/:]/g,'-');
+      const url = `${base}/coverage-history-${safe}.json`;
+      document.getElementById('rawMaster').textContent = url;
+      document.getElementById('rawMaster').href = url;
+      try {
+        const data = await fetchJson(url);
+        buildChart(data, branch);
+        fillTable(data);
+      } catch(e){
+        alert('Falha ao carregar histórico: '+e.message);
+      }
+    }
+
+    loadBranch();
+  </script>
+</body>
+</html>
