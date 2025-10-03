@@ -1,1 +1,8 @@
-{"timestamp":"2025-10-03T21:11:34Z","branch":"69/merge","safeBranch":"69-merge","coverage":95.32}
+[
+  {
+    "timestamp": "2025-10-03T21:11:49Z",
+    "branch": "69/merge",
+    "safeBranch": "69-merge",
+    "coverage": 95.32
+  }
+]
