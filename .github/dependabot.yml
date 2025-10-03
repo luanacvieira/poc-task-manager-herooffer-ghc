@@ -1,0 +1,144 @@
+version: 2
+# Dependabot configuration following recommended best practices for a mono-repo (backend + frontend)
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+updates:
+  # 1. Backend (Node / npm)
+  - package-ecosystem: "npm"
+    directory: "/backend"           # Location of package.json
+    schedule:
+      interval: "daily"             # Daily keeps PR batch manageable; adjust to "weekly" if noisy
+      time: "06:00"                 # UTC time; choose early morning
+      timezone: "UTC"
+    allow:                           # (Optional) Explicit allowance examples (can expand later)
+      - dependency-type: "direct"    # Focus on direct first; transitive come via lockfile
+      - dependency-type: "all"       # Keep both (first direct ensures clarity; second covers remainder)
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    rebase-strategy: auto
+    labels:
+      - "dependencies"
+      - "backend"
+      - "security"
+    commit-message:
+      prefix: "deps(back)"
+      include: "scope"
+    reviewers: []        # Add GitHub usernames if you want mandatory review
+    assignees: []
+    groups:              # Group related updates to reduce PR noise
+      jest-testing:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "mongodb-memory-server*"
+          - "supertest"
+      eslint-linting:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@typescript-eslint/*"
+          - "eslint-plugin-*"
+      express-stack:
+        patterns:
+          - "express"
+          - "cors"
+          - "express-rate-limit"
+      mongoose-orm:
+        patterns:
+          - "mongoose"
+
+  # 2. Frontend (Node / npm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "daily"
+      time: "06:10"                  # Stagger vs backend by a few minutes
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    rebase-strategy: auto
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "deps(front)"
+      include: "scope"
+    groups:
+      react-core:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-scripts"
+      testing-library:
+        patterns:
+          - "@testing-library/*"
+      types-packages:
+        patterns:
+          - "@types/*"
+      eslint-linting:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@typescript-eslint/*"
+          - "eslint-plugin-*"
+      typescript-tooling:
+        patterns:
+          - "typescript"
+      axios-lib:
+        patterns:
+          - "axios"
+
+  # 3. GitHub Actions workflow dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"                    # Root .github/workflows
+    schedule:
+      interval: "weekly"              # Weekly is usually enough for actions
+      day: "monday"
+      time: "06:20"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+    open-pull-requests-limit: 5
+
+  # 4. Security fixes only (optional extra pass). Dependabot security alerts will still open PRs automatically.
+  # If you want a dedicated security-only scanning run, you can duplicate an ecosystem with 'allow' filters.
+  # Example (COMMENTED OUT):
+  # - package-ecosystem: "npm"
+  #   directory: "/backend"
+  #   schedule:
+  #     interval: "daily"
+  #   allow:
+  #     - dependency-type: "direct"
+  #   labels: ["dependencies", "security", "backend"]
+  #   security-updates-only: true
+
+# Notes / Rationale:
+# - Grouping reduces PR fatigue (especially for jest / lint / react ecosystems).
+# - Prefixes in commit messages help triage and enable optional automations.
+# - versioning-strategy: increase => allows minor/patch jumps; majors still raise PRs, not forced.
+# - You can enable auto-merge (see below) via a separate workflow reacting to labels like 'automerge'.
+# - Adjust times to your timezone if desired.
+
+# Optional: create a separate workflow to automerge safe updates (minor/patch) when CI passes & label applied.
+# Example (not created automatically here):
+# name: Auto-merge Dependabot
+# on: pull_request
+# permissions:
+#   contents: write
+#   pull-requests: write
+# jobs:
+#   automerge:
+#     if: >-
+#       github.actor == 'dependabot[bot]' &&
+#       contains(join(fromJson(toJson(github.event.pull_request.labels)).*.name, ','), 'automerge')
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Enable auto-merge
+#         run: gh pr merge "$PR_URL" --rebase --auto
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           PR_URL: ${{ github.event.pull_request.html_url }}
