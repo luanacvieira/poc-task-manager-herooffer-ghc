@@ -1,0 +1,10 @@
+# Auto-label rules
+backend:
+  - backend/**
+frontend:
+  - frontend/**
+ci:
+  - .github/workflows/**
+security:
+  - sbom/**
+  - .github/dependabot.yml
