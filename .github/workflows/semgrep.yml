@@ -1,0 +1,63 @@
+name: Semgrep SAST
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '30 3 * * 1'  # Semanal (segunda 03:30 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  semgrep:
+    name: Semgrep Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Python (for Semgrep CLI if needed)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Semgrep rules
+        uses: actions/cache@v4
+        with:
+          path: ~/.semgrep
+          key: semgrep-rules-${{ runner.os }}-v1
+
+      - name: Run Semgrep (OSS rules + OWASP Top 10)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/javascript
+          generateSarif: true
+          json: false
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: '0'
+          SEMGREP_TIMEOUT: '600'
+
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: Upload SARIF artifact (backup)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: warn
