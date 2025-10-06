@@ -379,10 +379,8 @@ jobs:
             echo '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"tools":[]},"components":[]}' > sbom/combined.json
           fi
           # Add a lightweight index for quick inspection
-          if [ ! -f sbom/index.txt ]; then
-            echo "SBOM files:" > sbom/index.txt
-            ls -1 sbom >> sbom/index.txt || true
-          fi
+          echo "SBOM files:" > sbom/index.txt
+          ls -1 sbom >> sbom/index.txt || true
           ls -l sbom
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
