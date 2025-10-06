@@ -35,18 +35,44 @@ jobs:
         with:
           path: ~/.semgrep
           key: semgrep-rules-${{ runner.os }}-v1
+      - name: Install Semgrep CLI
+        run: pip install --no-cache-dir semgrep==1.36.0
 
-      - name: Run Semgrep (OSS rules + OWASP Top 10)
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/javascript
-          generateSarif: true
-          json: false
+      - name: Run Semgrep (OWASP + JS rules) -> SARIF
         env:
-          SEMGREP_ENABLE_VERSION_CHECK: '0'
           SEMGREP_TIMEOUT: '600'
+        run: |
+          set -e
+          semgrep --config p/owasp-top-ten --config p/javascript --timeout $SEMGREP_TIMEOUT --sarif -o semgrep.sarif || true
+          if [ ! -f semgrep.sarif ]; then echo "::error::Falha ao gerar semgrep.sarif"; exit 1; fi
+          echo "Generated semgrep.sarif (size $(wc -c < semgrep.sarif) bytes)"
+
+      - name: Validate SARIF presence
+        run: |
+          if [ ! -f semgrep.sarif ]; then
+            echo "::error::semgrep.sarif não encontrado. Falhando scan."
+            exit 1
+          fi
+          echo "semgrep.sarif encontrado; tamanho:" $(wc -c < semgrep.sarif) "bytes"
+
+      - name: Build Markdown Summary
+        run: |
+          ERRORS=$(jq '[.runs[].results[]? | select((.level|ascii_downcase)=="error")] | length' semgrep.sarif || echo 0)
+          WARNINGS=$(jq '[.runs[].results[]? | select((.level|ascii_downcase)=="warning")] | length' semgrep.sarif || echo 0)
+          INFOS=$(jq '[.runs[].results[]? | select((.level|ascii_downcase)=="note" or (.level|ascii_downcase)=="info")] | length' semgrep.sarif || echo 0)
+          TOTAL=$(jq '[.runs[].results[]?] | length' semgrep.sarif || echo 0)
+          echo "### Semgrep Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ERROR    | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+          echo "| WARNING  | $WARNINGS |" >> $GITHUB_STEP_SUMMARY
+          echo "| INFO     | $INFOS |" >> $GITHUB_STEP_SUMMARY
+          echo "| TOTAL    | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "\nTop 5 (arquivo:regra)" >> $GITHUB_STEP_SUMMARY
+            jq -r '.runs[].results[]? | "- " + (.locations[0].physicalLocation.artifactLocation.uri // "?") + ":" + (.ruleId // "")' semgrep.sarif | head -5 >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "ERROR_COUNT=$ERRORS" >> $GITHUB_ENV
 
       - name: Upload SARIF to code scanning
         if: always()
@@ -61,3 +87,13 @@ jobs:
           name: semgrep-sarif
           path: semgrep.sarif
           if-no-files-found: warn
+
+      - name: Gate on ERROR findings (post-upload)
+        run: |
+          ERRORS=$(jq '[.runs[].results[]? | select(.level=="error" or .level=="ERROR")] | length' semgrep.sarif || echo 0)
+          echo "Total ERROR findings: $ERRORS"
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Semgrep encontrou $ERRORS findings de severidade ERROR. Bloqueando PR."
+            exit 1
+          fi
+          echo "Nenhum finding ERROR. Gate liberado."
