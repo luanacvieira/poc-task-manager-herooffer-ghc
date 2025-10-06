@@ -41,7 +41,7 @@ module.exports = [
     plugins: { security },
     rules: {
       ...js.configs.recommended.rules,
-      ...security.configs.recommended.rules,
+      ...(security.configs?.recommended?.rules || {}),
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     }
   },
