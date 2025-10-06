@@ -505,6 +505,8 @@ jobs:
           fi
           if [ -f combined-coverage/coverage-badge.json ]; then
             cp combined-coverage/coverage-badge.json badges/coverage-badge.json
+            # Also store a branch-qualified copy for PR delta base comparisons
+            cp combined-coverage/coverage-badge.json "badges/coverage-badge-${SAFE_BRANCH}.json" || true
           fi
           if [ -f combined-coverage/coverage-gate-badge.json ]; then
             cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
@@ -530,8 +532,16 @@ jobs:
             git config user.name "github-actions[bot]"
             git add badges
             git commit -m "chore(badges): update badges for ${GITHUB_REF_NAME}" || echo "Nothing to commit"
-            # Push current HEAD snapshot to remote branch 'badges'
-            git push origin HEAD:badges
+            # Fetch remote 'badges' to have an up-to-date ref for --force-with-lease; ignore if it doesn't exist yet
+            git fetch --depth=1 origin badges || true
+            # Attempt a normal push first (fast-forward expected most of the time). If rejected, retry with --force-with-lease, then --force as last resort.
+            if ! git push origin HEAD:badges; then
+              echo "Non-fast-forward push rejected. Retrying with --force-with-lease.";
+              if ! git push --force-with-lease=origin/badges origin HEAD:badges; then
+                echo "--force-with-lease failed (possibly branch created in parallel). Falling back to --force (may overwrite last badge snapshot).";
+                git push --force origin HEAD:badges;
+              fi
+            fi
           else
             echo "No badge changes to commit"
           fi
@@ -548,7 +558,8 @@ jobs:
           script: |
             const marker='<!-- coverage-delta -->';
             const safeNumber = (val) => { const n = parseFloat(val); return Number.isFinite(n) ? n : null; };
-            const currentRaw = process.env.CURRENT_AVG;
+            let currentRaw = process.env.CURRENT_AVG;
+            if(currentRaw && /^(nan|infinity)$/i.test(currentRaw.trim())) currentRaw='';
             const currentNum = safeNumber(currentRaw);
             const baseRef = context.payload.pull_request.base.ref; // base branch
             const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
