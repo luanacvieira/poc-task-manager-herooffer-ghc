@@ -315,22 +315,22 @@ jobs:
             git reset --hard
           fi
           mkdir -p badges/history
-          if [ -f ../combined-coverage/coverage-badge.json ]; then
-            cp ../combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
-            cp ../combined-coverage/coverage-badge.json badges/coverage-badge.json
+          if [ -f combined-coverage/coverage-badge.json ]; then
+            cp combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
+            cp combined-coverage/coverage-badge.json badges/coverage-badge.json
           fi
-          if [ -f ../combined-coverage/coverage-gate-badge.json ]; then
-            cp ../combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
-            cp ../combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
           fi
           BUILD_STATUS="${{ needs['build-backend'].result }}-${{ needs['build-frontend'].result }}"
           if [ "$BUILD_STATUS" = "success-success" ]; then COLOR=green; MSG=success; else COLOR=red; MSG=fail; fi
             echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge-${SAFE_BRANCH}.json
             cp badges/build-status-badge-${SAFE_BRANCH}.json badges/build-status-badge.json
-          if [ -f ../combined-coverage/coverage-metrics.json ]; then
+          if [ -f combined-coverage/coverage-metrics.json ]; then
             HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
             LATEST_FILE=badges/history/coverage-latest-${SAFE_BRANCH}.json
-            METRICS=$(cat ../combined-coverage/coverage-metrics.json)
+            METRICS=$(cat combined-coverage/coverage-metrics.json)
             echo "$METRICS" > "$LATEST_FILE"
             node <<'EOF'
             const fs = require('fs');
