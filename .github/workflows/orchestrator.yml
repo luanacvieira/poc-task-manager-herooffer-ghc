@@ -118,6 +118,9 @@ jobs:
     name: Coverage Gate (>=80%)
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
+    outputs:
+      coverage_avg: ${{ steps.combine.outputs.avg }}
+      coverage_gate: ${{ steps.combine.outputs.gate }}
     steps:
       - uses: actions/checkout@v4
       - name: Download Coverage Artifacts
@@ -125,6 +128,7 @@ jobs:
         with:
           path: coverage-artifacts
       - name: Combine & Enforce Coverage
+        id: combine
         run: |
           set -e
           BACK=$(find coverage-artifacts/backend-coverage -maxdepth 2 -name 'coverage-summary.json' | head -n1 || true)
@@ -143,16 +147,22 @@ jobs:
           for(const m of metrics){ const merged=merge(b.total[m], f.total[m]); merged.pct=(merged.covered/merged.total*100).toFixed(2); result.total[m]=merged; }
           const thresholds={ lines:80, statements:80, functions:80, branches:80 };
           const fails=Object.entries(thresholds).filter(([k,v])=> parseFloat(result.total[k].pct)<v).map(([k])=>k+':'+result.total[k].pct);
-          if(fails.length){ console.error('Coverage gate fail:', fails.join(',')); process.exit(1); }
           const avg=(Object.values(result.total).reduce((a,m)=>a+parseFloat(m.pct),0)/metrics.length).toFixed(2);
           fs.mkdirSync('combined-coverage',{recursive:true});
-          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: parseFloat(avg)>=80?'green':'red'}));
+          const avgColor = parseFloat(avg)>=90?'brightgreen':parseFloat(avg)>=80?'green':parseFloat(avg)>=60?'orange':'red';
+          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: avgColor}));
+          const gatePass = fails.length === 0;
+          fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify({schemaVersion:1,label:'coverage gate',message: gatePass? 'pass':'fail',color: gatePass? 'green':'red'}));
+          fs.writeFileSync('combined-coverage/coverage-metrics.json', JSON.stringify({ avg, metrics: result.total, pass: gatePass, fails }, null, 2));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `avg=${avg}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `gate=${gatePass? 'pass':'fail'}\n`);
+          if(fails.length){ console.error('Coverage gate fail:', fails.join(',')); process.exit(1); }
           EOF
-      - name: Upload Combined Coverage Badge
+      - name: Upload Combined Coverage Artifact
         uses: actions/upload-artifact@v4
         with:
           name: combined-coverage
-          path: combined-coverage/coverage-badge.json
+          path: combined-coverage
 
   build-backend:
     name: Build Backend
@@ -275,8 +285,67 @@ jobs:
           echo "Typecheck: ${{ needs.typecheck.result }}" >> $GITHUB_STEP_SUMMARY
           echo "Backend Tests: ${{ needs['test-backend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "Frontend Tests: ${{ needs['test-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-          echo "Coverage Gate: ${{ needs['coverage-gate'].result }}" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage Gate: ${{ needs['coverage-gate'].result }} (avg=${{ needs['coverage-gate'].outputs.coverage_avg }} gate=${{ needs['coverage-gate'].outputs.coverage_gate }})" >> $GITHUB_STEP_SUMMARY
           echo "Build Backend: ${{ needs['build-backend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "Build Frontend: ${{ needs['build-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
           echo "Sonar: ${{ needs.sonar.result }}" >> $GITHUB_STEP_SUMMARY
+      - name: Checkout (for badges)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+      - name: Download Combined Coverage Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: combined-coverage
+          path: combined-coverage
+      - name: Publish Badges (push events only)
+        if: github.event_name == 'push'
+        run: |
+          set -e
+          SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+          echo "Publishing badges for branch ${GITHUB_REF_NAME} (safe=${SAFE_BRANCH})"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git fetch origin badges:badges || true
+          if git show-ref --quiet refs/heads/badges; then
+            git checkout badges
+          else
+            git checkout --orphan badges
+            git reset --hard
+          fi
+          mkdir -p badges/history
+          if [ -f ../combined-coverage/coverage-badge.json ]; then
+            cp ../combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
+            cp ../combined-coverage/coverage-badge.json badges/coverage-badge.json
+          fi
+          if [ -f ../combined-coverage/coverage-gate-badge.json ]; then
+            cp ../combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
+            cp ../combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
+          fi
+          BUILD_STATUS="${{ needs['build-backend'].result }}-${{ needs['build-frontend'].result }}"
+          if [ "$BUILD_STATUS" = "success-success" ]; then COLOR=green; MSG=success; else COLOR=red; MSG=fail; fi
+            echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge-${SAFE_BRANCH}.json
+            cp badges/build-status-badge-${SAFE_BRANCH}.json badges/build-status-badge.json
+          if [ -f ../combined-coverage/coverage-metrics.json ]; then
+            HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
+            LATEST_FILE=badges/history/coverage-latest-${SAFE_BRANCH}.json
+            METRICS=$(cat ../combined-coverage/coverage-metrics.json)
+            echo "$METRICS" > "$LATEST_FILE"
+            node <<'EOF'
+            const fs = require('fs');
+            const path = process.env.HISTORY_FILE;
+            const metrics = JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));
+            let data=[]; try { data = JSON.parse(fs.readFileSync(path,'utf8')); } catch {}
+            data.push({ t: Math.floor(Date.now()/1000), avg: metrics.avg, pass: metrics.pass });
+            data = data.slice(-199);
+            fs.writeFileSync(path, JSON.stringify(data,null,2));
+            EOF
+          fi
+          if git status --porcelain | grep -q .; then
+            git add badges
+            git commit -m "chore(badges): update badges for ${GITHUB_REF_NAME}" || echo "Nothing to commit"
+            git push origin badges
+          else
+            echo "No badge changes to commit"
+          fi
