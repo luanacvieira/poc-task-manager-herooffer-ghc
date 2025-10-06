@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
   security-events: write
   pull-requests: write
   issues: write
@@ -39,18 +40,20 @@ jobs:
       - name: Install root + workspaces deps (peer-safe)
         run: |
           set -e
-          echo "Using peer-deps tolerant install due to eslint 9 + react-hooks plugin peer range.";
+          echo "Installing root devDependencies (eslint & plugins) + workspaces with legacy peer fallback.";
           if [ -f package-lock.json ]; then
-            echo "Lockfile exists -> attempting npm ci";
-            npm ci --workspaces || (echo "npm ci failed; falling back to install with legacy peer deps" && npm install --workspaces --legacy-peer-deps)
-          else
-            echo "(No package-lock.json yet) generating with npm install --legacy-peer-deps";
-            npm install --workspaces --legacy-peer-deps
+            npm ci || echo "npm ci failed -> fallback";
           fi
+          if [ ! -d node_modules ]; then
+            npm install --legacy-peer-deps
+          fi
+          # Ensure workspace deps too (will respect lockfile entries)
+            npm install --workspaces --legacy-peer-deps
+          echo "Installed packages:"; ls -1 node_modules | head -n 30 || true
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
-          npx eslint backend frontend --ext .js,.ts,.tsx
+          npx eslint backend frontend
 
   typecheck:
     name: Type Check (Frontend)
@@ -65,7 +68,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: TypeScript Check
         working-directory: frontend
         run: npx tsc --noEmit
@@ -83,7 +87,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Run Backend Tests
         working-directory: backend
         run: |
@@ -109,7 +114,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Run Frontend Tests
         working-directory: frontend
         env:
@@ -150,13 +156,31 @@ jobs:
           const frontend = process.env.FRONT;
           const b = JSON.parse(fs.readFileSync(backend,'utf8'));
           const f = JSON.parse(fs.readFileSync(frontend,'utf8'));
-          function merge(a,b){return { total:a.total+b.total, covered:a.covered+b.covered };}
+          function merge(a,b){
+            // Defensive: ensure numeric
+            const at = Number(a.total)||0, bt=Number(b.total)||0, ac=Number(a.covered)||0, bc=Number(b.covered)||0;
+            return { total: at+bt, covered: ac+bc };
+          }
           const metrics = Object.keys(b.total);
           const result={ total:{} };
-          for(const m of metrics){ const merged=merge(b.total[m], f.total[m]); merged.pct=(merged.covered/merged.total*100).toFixed(2); result.total[m]=merged; }
+          for(const m of metrics){
+            const merged=merge(b.total[m], f.total[m]);
+            if(merged.total === 0){
+              // No items of this metric -> treat as fully covered (neutral) to avoid NaN & not penalize
+              merged.pct='100.00';
+            } else {
+              const pct = (merged.covered/merged.total*100);
+              merged.pct = (Number.isFinite(pct)? pct : 0).toFixed(2);
+            }
+            result.total[m]=merged;
+          }
           const thresholds={ lines:80, statements:80, functions:80, branches:80 };
-          const fails=Object.entries(thresholds).filter(([k,v])=> parseFloat(result.total[k].pct)<v).map(([k])=>k+':'+result.total[k].pct);
-          const avg=(Object.values(result.total).reduce((a,m)=>a+parseFloat(m.pct),0)/metrics.length).toFixed(2);
+            // Fail list only considers finite percentages
+          const fails=Object.entries(thresholds).filter(([k,v])=> {
+            const val=parseFloat(result.total[k].pct); return Number.isFinite(val) && val < v;
+          }).map(([k])=>k+':'+result.total[k].pct);
+          const numericPcts = Object.values(result.total).map(m=>parseFloat(m.pct)).filter(Number.isFinite);
+          const avg = (numericPcts.length? (numericPcts.reduce((a,x)=>a+x,0)/numericPcts.length) : 100).toFixed(2);
           fs.mkdirSync('combined-coverage',{recursive:true});
           const avgColor = parseFloat(avg)>=90?'brightgreen':parseFloat(avg)>=80?'green':parseFloat(avg)>=60?'orange':'red';
           fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: avgColor}));
@@ -186,7 +210,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Backend smoke
         working-directory: backend
         run: |
@@ -208,7 +233,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Build
         working-directory: frontend
         run: |
@@ -249,7 +275,6 @@ jobs:
     name: Diff Coverage (changed files)
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
-    if: github.event_name == 'pull_request'
     outputs:
       diff_pct: ${{ steps.diffcalc.outputs.pct }}
       diff_pass: ${{ steps.diffcalc.outputs.pass }}
@@ -260,9 +285,18 @@ jobs:
       - name: List Changed Files
         id: changed
         run: |
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
-          git fetch origin "$BASE_REF:$BASE_REF" || true
-          git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            git fetch origin "$BASE_REF:$BASE_REF" || true
+            git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              git diff --name-only HEAD~1..HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+            else
+              echo "(No previous commit to diff against)";
+              touch changed.txt
+            fi
+          fi
           echo "Changed files:"; cat changed.txt || true
           printf 'list<<EOF\n' >> $GITHUB_OUTPUT
           cat changed.txt >> $GITHUB_OUTPUT
@@ -278,15 +312,18 @@ jobs:
           CHANGED="$(cat changed.txt)"
           if [ -z "${CHANGED// /}" ]; then
             echo "No changed source files; marking pass with 100%.";
+            mkdir -p diff-coverage
+            echo '{"schemaVersion":1,"label":"diff coverage","message":"100%","color":"brightgreen"}' > diff-coverage/diff-coverage-badge.json
             echo "pct=100" >> $GITHUB_OUTPUT; echo "pass=true" >> $GITHUB_OUTPUT; exit 0;
           fi
           echo "Changed files:\n$CHANGED"
           node <<'EOF'
           const fs = require('fs');
           const changedRaw = process.env.CHANGED_LIST.split('\n').filter(Boolean);
+          const threshold = parseFloat(process.env.DIFF_THRESHOLD || '80');
           function walk(dir, out=[]) { for (const e of fs.readdirSync(dir,{withFileTypes:true})){ const p=dir+'/'+e.name; if(e.isDirectory()) walk(p,out); else if(e.isFile()&&e.name==='lcov.info') out.push(p);} return out; }
           const lcovFiles = walk('diff-cov-artifacts');
-          if(!lcovFiles.length){ fs.appendFileSync(process.env.GITHUB_OUTPUT,'pct=0\npass=false\n'); process.exit(0); }
+          if(!lcovFiles.length){ fs.appendFileSync(process.env.GITHUB_OUTPUT,'pct=0\npass=false\n'); process.exit(1); }
           let total=0, covered=0;
           for(const file of lcovFiles){
             const data = fs.readFileSync(file,'utf8').split('\n');
@@ -302,15 +339,19 @@ jobs:
             }
           }
           const pct = total? (covered/total*100).toFixed(2) : '100';
-          const pass = parseFloat(pct) >= 80;
+          const pass = parseFloat(pct) >= threshold;
           fs.mkdirSync('diff-coverage',{recursive:true});
-          const color = parseFloat(pct)>=90?'brightgreen':parseFloat(pct)>=80?'green':parseFloat(pct)>=60?'orange':'red';
+          const color = parseFloat(pct)>=90?'brightgreen':parseFloat(pct)>=threshold?'green':parseFloat(pct)>=60?'orange':'red';
           fs.writeFileSync('diff-coverage/diff-coverage-badge.json', JSON.stringify({schemaVersion:1,label:'diff coverage',message:pct+'%',color}));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `pct=${pct}\npass=${pass}\n`);
-          if(!pass) console.error('Diff coverage below threshold (80%) ->', pct);
+          if(!pass){
+            console.error(`Diff coverage below threshold (${threshold}%) -> ${pct}%`);
+            process.exit(1);
+          }
           EOF
         env:
           CHANGED_LIST: ${{ steps.changed.outputs.list }}
+          DIFF_THRESHOLD: 80
         shell: bash
       - name: Upload Diff Coverage Artifact
         uses: actions/upload-artifact@v4
@@ -329,18 +370,36 @@ jobs:
       - name: Generate SBOM backend
         working-directory: backend
         run: |
-          npm ci || npm install
+          (npm ci || npm install --legacy-peer-deps)
           npx @cyclonedx/cyclonedx-npm --json --output ../sbom-backend.json || npx cyclonedx-npm --json --output ../sbom-backend.json || echo "(fallback)"
       - name: Generate SBOM frontend
         working-directory: frontend
         run: |
-          npm ci || npm install
+          (npm ci || npm install --legacy-peer-deps)
           npx @cyclonedx/cyclonedx-npm --json --output ../sbom-frontend.json || npx cyclonedx-npm --json --output ../sbom-frontend.json || echo "(fallback)"
       - name: Package SBOMs
         run: |
           mkdir -p sbom
           mv sbom-backend.json sbom/backend.json 2>/dev/null || true
           mv sbom-frontend.json sbom/frontend.json 2>/dev/null || true
+          BACK_OK=false; FRONT_OK=false
+          [ -f sbom/backend.json ] && BACK_OK=true
+          [ -f sbom/frontend.json ] && FRONT_OK=true
+          if $BACK_OK && $FRONT_OK; then
+            node -e "const fs=require('fs');const back=JSON.parse(fs.readFileSync('sbom/backend.json','utf8'));const front=JSON.parse(fs.readFileSync('sbom/frontend.json','utf8'));const combined={bomFormat:'CycloneDX',specVersion:back.specVersion||front.specVersion||'1.5',version:1,metadata:{tools:[...(back.metadata?.tools||[]),...(front.metadata?.tools||[])]},components:[...(back.components||[]),...(front.components||[])]};fs.writeFileSync('sbom/combined.json',JSON.stringify(combined,null,2));console.log('Combined SBOM written to sbom/combined.json');"
+          elif $BACK_OK && ! $FRONT_OK; then
+            echo "Frontend SBOM missing; using backend SBOM as combined.";
+            cp sbom/backend.json sbom/combined.json
+          elif $FRONT_OK && ! $BACK_OK; then
+            echo "Backend SBOM missing; using frontend SBOM as combined.";
+            cp sbom/frontend.json sbom/combined.json
+          else
+            echo "No SBOM files generated; creating placeholder.";
+            echo '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"tools":[]},"components":[]}' > sbom/combined.json
+          fi
+          # Add a lightweight index for quick inspection
+          echo "SBOM files:" > sbom/index.txt
+          ls -1 sbom >> sbom/index.txt || true
           ls -l sbom
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
@@ -364,7 +423,7 @@ jobs:
             echo "::warning::External PR (fork) - skipping Sonar.";
             exit 0
           fi
-            if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
             echo "SKIP=true" >> $GITHUB_OUTPUT
             echo "::warning::SONAR_TOKEN missing - skipping Sonar.";
           else
@@ -391,9 +450,7 @@ jobs:
           STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ env.SONAR_PROJECT_KEY }}" | jq -r '.projectStatus.status')
           echo "Quality Gate Status: $STATUS"
           if [ "$STATUS" != "OK" ] && [ "$STATUS" != "SUCCESS" ]; then
-            echo "::error::Quality Gate failed ($STATUS)"
-            exit 1
-          fi
+            echo "::error::Quality Gate failed ($STATUS)"; exit 1; fi
       - name: Sonar Summary
         run: |
           if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then
@@ -403,11 +460,82 @@ jobs:
             echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
             echo "Analysis executed." >> $GITHUB_STEP_SUMMARY
           fi
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    needs: [build-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep (ci ruleset)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/ci
+      - name: Semgrep Summary
+        run: |
+          echo "### Semgrep" >> $GITHUB_STEP_SUMMARY
+          echo "Executed (ci rules)." >> $GITHUB_STEP_SUMMARY
+      - name: Generate Semgrep SARIF
+        run: |
+          pip install --no-cache-dir semgrep
+          semgrep --config p/ci --sarif --output semgrep.sarif || { echo "Semgrep SARIF generation failed"; exit 1; }
+          ls -l semgrep.sarif || true
+      - name: Upload Semgrep SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
 
+  package-backend:
+    name: Build & Publish Backend Image (GHCR)
+    runs-on: ubuntu-latest
+    needs: [build-backend]
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build & Push Image
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/poc-task-manager-backend
+        run: |
+          TAG=$(echo "$GITHUB_REF_NAME" | tr '/' '-')
+          docker build -t $IMAGE_NAME:$TAG backend
+          docker push $IMAGE_NAME:$TAG
+          echo "Image pushed: $IMAGE_NAME:$TAG"
+
+  deploy-qa:
+    name: Deploy QA (Demo)
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, coverage-gate, codeql, semgrep, sonar]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: QA
+      url: https://example-qa.invalid
+    steps:
+      - name: Simulated QA Deploy
+        run: |
+          echo "(Demo) Deploying to QA environment..."
+          echo "This is a placeholder deploy step for gating demonstration." 
+
+  deploy-prd:
+    name: Deploy Production (Demo)
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, coverage-gate, codeql, semgrep, sonar]
+    if: github.ref == 'refs/heads/master'
+    environment:
+      name: PRD
+      url: https://example-prod.invalid
+    steps:
+      - name: Simulated Production Deploy
+        run: |
+          echo "(Demo) Deploying to Production environment..."
+          echo "This is a placeholder deploy step for gating demonstration." 
   finalize:
     name: Finalize Summary
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar, diff-coverage, sbom]
+    needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar, diff-coverage, sbom, semgrep]
     if: always()
     steps:
       - name: Summary
@@ -444,39 +572,31 @@ jobs:
         run: |
           set -e
           SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-          echo "Publishing badges for branch ${GITHUB_REF_NAME} (safe=${SAFE_BRANCH})"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          # Sonar Quality Gate badge (attempt fetch)
-          node -e "const fs=require('fs');const https=require('https');const token=process.env.SONAR_TOKEN;const project=process.env.SONAR_PROJECT_KEY;const write=(m,c)=>fs.writeFileSync('sonar-qg-badge.json',JSON.stringify({schemaVersion:1,label:'quality gate',message:m,color:c}));if(!token){write('skipped','lightgrey');process.exit(0);}const opts={hostname:'sonarcloud.io',path:'/api/qualitygates/project_status?projectKey='+encodeURIComponent(project),headers:{Authorization:'Basic '+Buffer.from(token+':').toString('base64')}};https.get(opts,res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);const status=(j.projectStatus&&j.projectStatus.status)||'UNKNOWN';const pass=['OK','SUCCESS'].includes(status);write(status.toLowerCase(),pass?'green':'red');}catch(e){write('error','red');}})}).on('error',()=>write('error','red'));"
-          git fetch origin badges:badges || true
-          if git show-ref --quiet refs/heads/badges; then
-            git checkout badges
-          else
-            git checkout --orphan badges
-            git reset --hard
-          fi
           mkdir -p badges/history
+          if [ -f diff-coverage/diff-coverage-badge.json ]; then
+            DIFF_PCT=$(jq -r '.message' diff-coverage/diff-coverage-badge.json 2>/dev/null | tr -d '%')
+            if [ -n "$DIFF_PCT" ]; then
+              export DIFF_HISTORY_FILE=badges/history/diff-coverage-history-${SAFE_BRANCH}.json
+              node -e "const fs=require('fs');const p=process.env.DIFF_HISTORY_FILE;const val=parseFloat(process.env.DIFF_PCT_VAL);let d=[];try{d=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}d.push({t:Math.floor(Date.now()/1000),pct:val});d=d.slice(-199);fs.writeFileSync(p,JSON.stringify(d,null,2));" DIFF_PCT_VAL="$DIFF_PCT"
+            fi
+          fi
           if [ -f combined-coverage/coverage-badge.json ]; then
-            cp combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
             cp combined-coverage/coverage-badge.json badges/coverage-badge.json
+            # Also store a branch-qualified copy for PR delta base comparisons
+            cp combined-coverage/coverage-badge.json "badges/coverage-badge-${SAFE_BRANCH}.json" || true
           fi
           if [ -f combined-coverage/coverage-gate-badge.json ]; then
-            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
             cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
           fi
           if [ -f sonar-qg-badge.json ]; then
-            cp sonar-qg-badge.json badges/sonar-quality-gate-badge-${SAFE_BRANCH}.json
             cp sonar-qg-badge.json badges/sonar-quality-gate-badge.json
           fi
           if [ -f diff-coverage/diff-coverage-badge.json ]; then
-            cp diff-coverage/diff-coverage-badge.json badges/diff-coverage-badge-${SAFE_BRANCH}.json
             cp diff-coverage/diff-coverage-badge.json badges/diff-coverage-badge.json
           fi
           BUILD_STATUS="${{ needs['build-backend'].result }}-${{ needs['build-frontend'].result }}"
           if [ "$BUILD_STATUS" = "success-success" ]; then COLOR=green; MSG=success; else COLOR=red; MSG=fail; fi
-            echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge-${SAFE_BRANCH}.json
-            cp badges/build-status-badge-${SAFE_BRANCH}.json badges/build-status-badge.json
+            echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge.json
           if [ -f combined-coverage/coverage-metrics.json ]; then
             export HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
             LATEST_FILE=badges/history/coverage-latest-${SAFE_BRANCH}.json
@@ -485,9 +605,20 @@ jobs:
             node -e "const fs=require('fs');const p=process.env.HISTORY_FILE;const m=JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));let d=[];try{d=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}d.push({t:Math.floor(Date.now()/1000),avg:m.avg,pass:m.pass});d=d.slice(-199);fs.writeFileSync(p, JSON.stringify(d,null,2));"
           fi
           if git status --porcelain | grep -q .; then
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
             git add badges
             git commit -m "chore(badges): update badges for ${GITHUB_REF_NAME}" || echo "Nothing to commit"
-            git push origin badges
+            # Fetch remote 'badges' to have an up-to-date ref for --force-with-lease; ignore if it doesn't exist yet
+            git fetch --depth=1 origin badges || true
+            # Attempt a normal push first (fast-forward expected most of the time). If rejected, retry with --force-with-lease, then --force as last resort.
+            if ! git push origin HEAD:badges; then
+              echo "Non-fast-forward push rejected. Retrying with --force-with-lease.";
+              if ! git push --force-with-lease=origin/badges origin HEAD:badges; then
+                echo "--force-with-lease failed (possibly branch created in parallel). Falling back to --force (may overwrite last badge snapshot).";
+                git push --force origin HEAD:badges;
+              fi
+            fi
           else
             echo "No badge changes to commit"
           fi
@@ -498,26 +629,46 @@ jobs:
           CURRENT_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
           GATE_STATUS: ${{ needs['coverage-gate'].outputs.coverage_gate }}
           REPO_FULL: ${{ github.repository }}
+          DIFF_PCT: ${{ needs['diff-coverage'].outputs.diff_pct }}
+          DIFF_PASS: ${{ needs['diff-coverage'].outputs.diff_pass }}
         with:
           script: |
             const marker='<!-- coverage-delta -->';
-            const current = parseFloat(process.env.CURRENT_AVG);
+            const safeNumber = (val) => { const n = parseFloat(val); return Number.isFinite(n) ? n : null; };
+            let currentRaw = process.env.CURRENT_AVG;
+            if(currentRaw && /^(nan|infinity)$/i.test(currentRaw.trim())) currentRaw='';
+            const currentNum = safeNumber(currentRaw);
             const baseRef = context.payload.pull_request.base.ref; // base branch
             const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
             const url = `https://raw.githubusercontent.com/${process.env.REPO_FULL}/badges/badges/coverage-badge-${safeBase}.json`;
             let baseVal = null;
             try {
               const resp = await fetch(url);
-              if(resp.ok){ const json = await resp.json(); baseVal = parseFloat((json.message||'').replace('%','')); }
-            } catch(e) { /* ignore */ }
-            let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
-            let symbol='';
-            if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
-            const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
+              if(resp.ok){
+                const json = await resp.json();
+                baseVal = safeNumber((json.message||'').replace('%',''));
+              }
+            } catch(e) { /* ignore fetch errors */ }
+            let deltaVal = null; let symbol='';
+            if(currentNum!=null && baseVal!=null){
+              deltaVal = currentNum - baseVal;
+              symbol = deltaVal>0?'▲': deltaVal<0?'▼':'=';
+            }
+            const gateStatus = (process.env.GATE_STATUS || '').trim();
+            const gateDisplay = gateStatus ? gateStatus : 'unknown';
+            const currentDisplay = currentNum!=null ? currentNum.toFixed(2)+'%' : 'unavailable';
+            const baseDisplay = baseVal!=null ? baseVal.toFixed(2)+'%' : 'unavailable';
+            const deltaDisplay = (deltaVal==null? 'n/a' : `${symbol} ${deltaVal.toFixed(2)}%`);
+            const diffPctRaw = safeNumber(process.env.DIFF_PCT);
+            const diffPctDisplay = diffPctRaw!=null ? diffPctRaw.toFixed(2)+'%' : 'n/a';
+            const diffPassEnv = process.env.DIFF_PASS;
+            const diffPassDisplay = diffPctRaw==null ? 'n/a' : (diffPassEnv === 'true' ? 'pass' : 'fail');
+            const bodyContent = `### Coverage Delta\nCurrent (PR): **${currentDisplay}**\nBase (${baseRef}): **${baseDisplay}**\nDelta: **${deltaDisplay}**\nGate (>=80%): **${gateDisplay}**`;
+            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPctDisplay} (${diffPassDisplay})**`;
             const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             const existing = comments.find(c=> c.body && c.body.includes(marker));
             if(existing){
-              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${bodyContent}` });
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${extended}` });
             } else {
-              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${bodyContent}` });
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${extended}` });
             }

@@ -20,10 +20,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Check version bump type
         id: bump
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          set -e
-          # Dependabot inclui no título algo como: Bump express from 4.17.1 to 4.18.2
-          TITLE="${{ github.event.pull_request.title }}"
+          set -euo pipefail
+          TITLE="$PR_TITLE"
           echo "PR Title: $TITLE"
           if echo "$TITLE" | grep -Eoi ' to [0-9]+\.[0-9]+\.[0-9]+' >/dev/null; then
             TO_VER=$(echo "$TITLE" | grep -Eoi ' to [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
@@ -32,12 +33,12 @@ jobs:
             MAJOR_FROM=${FROM_VER%%.*}
             MAJOR_TO=${TO_VER%%.*}
             if [ "$MAJOR_FROM" != "$MAJOR_TO" ]; then
-              echo "major_change=true" >> $GITHUB_OUTPUT
+              echo "major_change=true" >> "$GITHUB_OUTPUT"
             else
-              echo "major_change=false" >> $GITHUB_OUTPUT
+              echo "major_change=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "major_change=false" >> $GITHUB_OUTPUT
+            echo "major_change=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Abort on major version bump
         if: steps.bump.outputs.major_change == 'true'

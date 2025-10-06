@@ -6,6 +6,7 @@
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^14.5.2",
+    "@testing-library/dom": "^9.3.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.0",
     "@types/react": "^18.3.8",
@@ -45,11 +46,6 @@
   },
   "proxy": "http://localhost:3001"
   ,"devDependencies": {
-    "eslint": "^8.57.0",
-    "@typescript-eslint/parser": "^5.62.0",
-    "@typescript-eslint/eslint-plugin": "^5.62.0",
-    "eslint-plugin-react": "^7.34.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
     "ajv": "^8.12.0",
     "ajv-keywords": "^5.1.0"
   }
