@@ -26,9 +26,7 @@
     "@types/jest": "^29.5.12",
     "mongodb-memory-server": "^9.1.6",
     "jest-environment-node": "^29.7.0",
-    "cross-env": "^7.0.3",
-    "eslint": "^9.37.0",
-    "eslint-plugin-security": "^3.0.1"
+    "cross-env": "^7.0.3"
   },
   "keywords": [
     "task",
