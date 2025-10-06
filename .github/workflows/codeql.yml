@@ -1,14 +1,8 @@
 name: CodeQL
 
 on:
-  # Executa após Build (mantém alinhado com artefatos se precisarmos no futuro)
-  workflow_run:
-    workflows: ["Build"]
-    types: [completed]
-  # Análises em PRs para alertar antes do merge
   pull_request:
     branches: [ master, develop ]
-  # Opcional: push direto em master/develop (cobertura contínua)
   push:
     branches: [ master, develop ]
   schedule:
@@ -20,21 +14,18 @@ permissions:
   security-events: write
 
 concurrency:
-  group: codeql-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: codeql-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   analyze:
-    # Em caso de workflow_run só prossegue se o build upstream teve sucesso
-    if: >-
-      ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     name: CodeQL Analyze (javascript-typescript)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Setup Node
