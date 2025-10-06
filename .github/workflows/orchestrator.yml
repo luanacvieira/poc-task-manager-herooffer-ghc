@@ -36,9 +36,14 @@ jobs:
             package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Install root + workspaces deps
+      - name: Install root + workspaces deps (no lock fallback)
         run: |
-          npm install --workspaces || npm install
+          if [ -f package-lock.json ]; then
+            npm ci --workspaces || npm install --workspaces
+          else
+            echo "(No package-lock.json yet) running npm install to generate lockfile";
+            npm install --workspaces
+          fi
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
@@ -249,6 +254,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: List Changed Files
+        id: changed
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$BASE_REF:$BASE_REF" || true
+          git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+          echo "Changed files:"; cat changed.txt || true
+          printf 'list<<EOF\n' >> $GITHUB_OUTPUT
+          cat changed.txt >> $GITHUB_OUTPUT
+          printf '\nEOF\n' >> $GITHUB_OUTPUT
       - name: Download Coverage Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -257,18 +272,15 @@ jobs:
         id: diffcalc
         run: |
           set -e
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
-          echo "Base ref: $BASE_REF"
-          git fetch origin "$BASE_REF:$BASE_REF" || true
-          CHANGED=$(git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true)
-          if [ -z "$CHANGED" ]; then
+          CHANGED="$(cat changed.txt)"
+          if [ -z "${CHANGED// /}" ]; then
             echo "No changed source files; marking pass with 100%.";
             echo "pct=100" >> $GITHUB_OUTPUT; echo "pass=true" >> $GITHUB_OUTPUT; exit 0;
           fi
           echo "Changed files:\n$CHANGED"
           node <<'EOF'
           const fs = require('fs');
-          const changedRaw = process.env.CHANGED_RAW.split('\n').filter(Boolean);
+          const changedRaw = process.env.CHANGED_LIST.split('\n').filter(Boolean);
           function walk(dir, out=[]) { for (const e of fs.readdirSync(dir,{withFileTypes:true})){ const p=dir+'/'+e.name; if(e.isDirectory()) walk(p,out); else if(e.isFile()&&e.name==='lcov.info') out.push(p);} return out; }
           const lcovFiles = walk('diff-cov-artifacts');
           if(!lcovFiles.length){ fs.appendFileSync(process.env.GITHUB_OUTPUT,'pct=0\npass=false\n'); process.exit(0); }
@@ -295,7 +307,7 @@ jobs:
           if(!pass) console.error('Diff coverage below threshold (80%) ->', pct);
           EOF
         env:
-          CHANGED_RAW: ${{ github.sha }}
+          CHANGED_LIST: ${{ steps.changed.outputs.list }}
         shell: bash
       - name: Upload Diff Coverage Artifact
         uses: actions/upload-artifact@v4
