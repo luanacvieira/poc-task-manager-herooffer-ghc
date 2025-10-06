@@ -293,6 +293,8 @@ jobs:
           CHANGED="$(cat changed.txt)"
           if [ -z "${CHANGED// /}" ]; then
             echo "No changed source files; marking pass with 100%.";
+            mkdir -p diff-coverage
+            echo '{"schemaVersion":1,"label":"diff coverage","message":"100%","color":"brightgreen"}' > diff-coverage/diff-coverage-badge.json
             echo "pct=100" >> $GITHUB_OUTPUT; echo "pass=true" >> $GITHUB_OUTPUT; exit 0;
           fi
           echo "Changed files:\n$CHANGED"
@@ -361,9 +363,24 @@ jobs:
           mkdir -p sbom
           mv sbom-backend.json sbom/backend.json 2>/dev/null || true
           mv sbom-frontend.json sbom/frontend.json 2>/dev/null || true
-          if [ -f sbom/backend.json ] && [ -f sbom/frontend.json ]; then
+          BACK_OK=false; FRONT_OK=false
+          [ -f sbom/backend.json ] && BACK_OK=true
+          [ -f sbom/frontend.json ] && FRONT_OK=true
+          if $BACK_OK && $FRONT_OK; then
             node -e "const fs=require('fs');const back=JSON.parse(fs.readFileSync('sbom/backend.json','utf8'));const front=JSON.parse(fs.readFileSync('sbom/frontend.json','utf8'));const combined={bomFormat:'CycloneDX',specVersion:back.specVersion||front.specVersion||'1.5',version:1,metadata:{tools:[...(back.metadata?.tools||[]),...(front.metadata?.tools||[])]},components:[...(back.components||[]),...(front.components||[])]};fs.writeFileSync('sbom/combined.json',JSON.stringify(combined,null,2));console.log('Combined SBOM written to sbom/combined.json');"
+          elif $BACK_OK && ! $FRONT_OK; then
+            echo "Frontend SBOM missing; using backend SBOM as combined.";
+            cp sbom/backend.json sbom/combined.json
+          elif $FRONT_OK && ! $BACK_OK; then
+            echo "Backend SBOM missing; using frontend SBOM as combined.";
+            cp sbom/frontend.json sbom/combined.json
+          else
+            echo "No SBOM files generated; creating placeholder.";
+            echo '{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"tools":[]},"components":[]}' > sbom/combined.json
           fi
+          # Add a lightweight index for quick inspection
+          echo "SBOM files:" > sbom/index.txt
+          ls -1 sbom >> sbom/index.txt || true
           ls -l sbom
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
@@ -509,9 +526,12 @@ jobs:
             node -e "const fs=require('fs');const p=process.env.HISTORY_FILE;const m=JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));let d=[];try{d=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}d.push({t:Math.floor(Date.now()/1000),avg:m.avg,pass:m.pass});d=d.slice(-199);fs.writeFileSync(p, JSON.stringify(d,null,2));"
           fi
           if git status --porcelain | grep -q .; then
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
             git add badges
             git commit -m "chore(badges): update badges for ${GITHUB_REF_NAME}" || echo "Nothing to commit"
-            git push origin badges
+            # Push current HEAD snapshot to remote branch 'badges'
+            git push origin HEAD:badges
           else
             echo "No badge changes to commit"
           fi
@@ -527,22 +547,36 @@ jobs:
         with:
           script: |
             const marker='<!-- coverage-delta -->';
-            const current = parseFloat(process.env.CURRENT_AVG);
+            const safeNumber = (val) => { const n = parseFloat(val); return Number.isFinite(n) ? n : null; };
+            const currentRaw = process.env.CURRENT_AVG;
+            const currentNum = safeNumber(currentRaw);
             const baseRef = context.payload.pull_request.base.ref; // base branch
             const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
             const url = `https://raw.githubusercontent.com/${process.env.REPO_FULL}/badges/badges/coverage-badge-${safeBase}.json`;
             let baseVal = null;
             try {
               const resp = await fetch(url);
-              if(resp.ok){ const json = await resp.json(); baseVal = parseFloat((json.message||'').replace('%','')); }
-            } catch(e) { /* ignore */ }
-            let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
-            let symbol='';
-            if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
-            const diffPct = process.env.DIFF_PCT ? `${process.env.DIFF_PCT}%` : 'n/a';
-            const diffPass = process.env.DIFF_PASS ? (process.env.DIFF_PASS === 'true' ? 'pass' : 'fail') : 'n/a';
-            const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
-            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPct} (${diffPass})**`;
+              if(resp.ok){
+                const json = await resp.json();
+                baseVal = safeNumber((json.message||'').replace('%',''));
+              }
+            } catch(e) { /* ignore fetch errors */ }
+            let deltaVal = null; let symbol='';
+            if(currentNum!=null && baseVal!=null){
+              deltaVal = currentNum - baseVal;
+              symbol = deltaVal>0?'▲': deltaVal<0?'▼':'=';
+            }
+            const gateStatus = (process.env.GATE_STATUS || '').trim();
+            const gateDisplay = gateStatus ? gateStatus : 'unknown';
+            const currentDisplay = currentNum!=null ? currentNum.toFixed(2)+'%' : 'unavailable';
+            const baseDisplay = baseVal!=null ? baseVal.toFixed(2)+'%' : 'unavailable';
+            const deltaDisplay = (deltaVal==null? 'n/a' : `${symbol} ${deltaVal.toFixed(2)}%`);
+            const diffPctRaw = safeNumber(process.env.DIFF_PCT);
+            const diffPctDisplay = diffPctRaw!=null ? diffPctRaw.toFixed(2)+'%' : 'n/a';
+            const diffPassEnv = process.env.DIFF_PASS;
+            const diffPassDisplay = diffPctRaw==null ? 'n/a' : (diffPassEnv === 'true' ? 'pass' : 'fail');
+            const bodyContent = `### Coverage Delta\nCurrent (PR): **${currentDisplay}**\nBase (${baseRef}): **${baseDisplay}**\nDelta: **${deltaDisplay}**\nGate (>=80%): **${gateDisplay}**`;
+            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPctDisplay} (${diffPassDisplay})**`;
             const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             const existing = comments.find(c=> c.body && c.body.includes(marker));
             if(existing){
