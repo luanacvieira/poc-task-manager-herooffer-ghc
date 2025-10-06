@@ -1,4 +1,4 @@
-// Flat ESLint config (ESLint v9+) consolidating backend (JS) and frontend (TS/React)
+// Flat ESLint config (ESLint 8.x compatible) consolidating backend (Node JS - CommonJS) and frontend (TS/React)
 const js = require('@eslint/js');
 // Graceful load of 'globals' (avoid hard crash if dependency resolution faltered in CI)
 let globals = {};
@@ -37,10 +37,14 @@ module.exports = [
   // Backend JS (Node)
   {
     files: ['backend/**/*.js'],
+    ignores: [
+      'backend/.eslintrc.js'
+    ],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'module',
-  globals: { ...(globals.node||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
+      // Backend uses CommonJS (require/module.exports). Set sourceType accordingly so no-undef isn't triggered.
+      sourceType: 'commonjs',
+      globals: { ...(globals.node||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
     },
     plugins: { security },
     rules: {

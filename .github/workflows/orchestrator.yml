@@ -39,14 +39,16 @@ jobs:
       - name: Install root + workspaces deps (peer-safe)
         run: |
           set -e
-          echo "Installing deps with legacy peer fallback (eslint pinned to 8.57.1 for CRA compatibility).";
+          echo "Installing root devDependencies (eslint & plugins) + workspaces with legacy peer fallback.";
           if [ -f package-lock.json ]; then
-            echo "Lockfile exists -> attempting npm ci (workspaces)";
-            npm ci --workspaces || (echo "npm ci failed; falling back to npm install --legacy-peer-deps" && npm install --workspaces --legacy-peer-deps)
-          else
-            echo "(No lockfile) generating one via npm install --legacy-peer-deps (workspaces)";
-            npm install --workspaces --legacy-peer-deps
+            npm ci || echo "npm ci failed -> fallback";
           fi
+          if [ ! -d node_modules ]; then
+            npm install --legacy-peer-deps
+          fi
+          # Ensure workspace deps too (will respect lockfile entries)
+            npm install --workspaces --legacy-peer-deps
+          echo "Installed packages:"; ls -1 node_modules | head -n 30 || true
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |

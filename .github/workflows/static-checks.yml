@@ -21,16 +21,15 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Install workspaces (peer-safe)
+      - name: Install root + workspaces (peer-safe)
         run: |
           set -e
-          if [ -f package-lock.json ]; then
-            npm ci --workspaces || npm install --workspaces --legacy-peer-deps
-          else
-            npm install --workspaces --legacy-peer-deps
-          fi
+          if [ -f package-lock.json ]; then npm ci || echo "npm ci failed"; fi
+          if [ ! -d node_modules ]; then npm install --legacy-peer-deps; fi
+          npm install --workspaces --legacy-peer-deps
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Unified ESLint
         run: npx eslint backend frontend || (echo "Retrying after possible missing modules" && npm install --workspaces --legacy-peer-deps && npx eslint backend frontend)
