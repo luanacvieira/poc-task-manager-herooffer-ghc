@@ -25,9 +25,9 @@ concurrency:
 
 jobs:
   analyze:
-    # Para workflow_run só roda se build upstream passou; para push/PR/schedule/dispatch roda direto
+    # Em caso de workflow_run só prossegue se o build upstream teve sucesso
     if: >-
-      ${{ github.event_name != 'workflow_run' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+      ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     name: CodeQL Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     strategy:
@@ -39,26 +39,14 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - name: Checkout (workflow_run / manual)
-        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Setup Node (cache workflow_run / manual)
-        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+          fetch-depth: 0
 
-      - name: Checkout (scheduled)
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions/checkout@v4
-      - name: Setup Node (cache - scheduled)
-        if: ${{ github.event_name == 'schedule' }}
+      - name: Setup Node (only for JS/TS analysis)
+        if: ${{ matrix.language == 'javascript-typescript' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
