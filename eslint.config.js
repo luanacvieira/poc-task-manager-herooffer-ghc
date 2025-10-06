@@ -1,6 +1,13 @@
 // Flat ESLint config (ESLint v9+) consolidating backend (JS) and frontend (TS/React)
 const js = require('@eslint/js');
-const globals = require('globals');
+// Graceful load of 'globals' (avoid hard crash if dependency resolution faltered in CI)
+let globals = {};
+try {
+  globals = require('globals');
+} catch (e) {
+  // Fallback to empty object; rules will still run, only global detection reduced.
+  console.warn('[eslint] Warning: module "globals" not found. Using empty globals map.');
+}
 const tseslint = require('@typescript-eslint/eslint-plugin');
 const tsParser = require('@typescript-eslint/parser');
 const reactPlugin = require('eslint-plugin-react');
@@ -23,7 +30,7 @@ module.exports = [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
-      globals: { ...globals.node, ...globals.es2021, ...globals.jest }
+  globals: { ...(globals.node||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
     },
     plugins: { security },
     rules: {
@@ -42,7 +49,7 @@ module.exports = [
         sourceType: 'module',
         ecmaFeatures: { jsx: true }
       },
-      globals: { ...globals.browser, ...globals.es2021, ...globals.jest }
+  globals: { ...(globals.browser||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
     },
     plugins: { '@typescript-eslint': tseslint, react: reactPlugin, 'react-hooks': reactHooks },
     rules: {
