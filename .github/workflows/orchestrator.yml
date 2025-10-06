@@ -130,6 +130,8 @@ jobs:
           BACK=$(find coverage-artifacts/backend-coverage -maxdepth 2 -name 'coverage-summary.json' | head -n1 || true)
           FRONT=$(find coverage-artifacts/frontend-coverage -maxdepth 2 -name 'coverage-summary.json' | head -n1 || true)
           if [ -z "$BACK" ] || [ -z "$FRONT" ]; then echo "::error::Missing coverage summaries"; exit 1; fi
+          export BACK
+          export FRONT
           node <<'EOF'
           const fs = require('fs');
           const glob = (p)=>p;

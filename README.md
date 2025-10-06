@@ -152,6 +152,23 @@ Build: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/lu
 
 ## Modelos de Pipeline (Comparativo para Apresentação ao Cliente)
 
+### Diagrama (Orchestrator)
+
+```mermaid
+flowchart TD
+	Lint[lint] --> Typecheck[typecheck]
+	Typecheck --> TB[test-backend]
+	Typecheck --> TF[test-frontend]
+	TB --> Cov[coverage-gate]
+	TF --> Cov
+	Cov --> BBack[build-backend]
+	BBack --> BFront[build-frontend]
+	BFront --> CodeQL[codeql]
+	BFront --> Sonar{sonar (push only)}
+	CodeQL --> Final[finalize]
+	Sonar --> Final
+```
+
 Este repositório contém DOIS MODELOS operacionais de CI para demonstrar vantagens / trade-offs:
 
 ### 1. Modelo "Separado" (Workflows Independentes)
