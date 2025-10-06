@@ -11,7 +11,7 @@ updates:
       time: "03:00"                 # Local early morning (America/Sao_Paulo)
       timezone: "America/Sao_Paulo"
     allow:
-      - dependency-type: "direct"    # Limit noise: update direct deps (lockfile updates will still bring transitives)
+      - dependency-type: "direct"    # Limit noise: update direct deps (lockfile updates still bring transitives)
     open-pull-requests-limit: 10
     versioning-strategy: increase
     rebase-strategy: auto
@@ -119,6 +119,7 @@ updates:
 # - versioning-strategy: increase => allows minor/patch jumps; majors still raise PRs, not forced.
 # - You can enable auto-merge (implemented separately) reacting to labels or conditions.
 # - Adjust times to your timezone if desired.
+# - Para habilitar auto-merge em uma PR específica do Dependabot: adicione o label `automerge` após os checks passarem.
 
 # Optional: create a separate workflow to automerge safe updates (minor/patch) when CI passes & label applied.
 # Example (not created automatically here):
