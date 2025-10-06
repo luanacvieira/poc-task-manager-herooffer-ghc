@@ -155,13 +155,31 @@ jobs:
           const frontend = process.env.FRONT;
           const b = JSON.parse(fs.readFileSync(backend,'utf8'));
           const f = JSON.parse(fs.readFileSync(frontend,'utf8'));
-          function merge(a,b){return { total:a.total+b.total, covered:a.covered+b.covered };}
+          function merge(a,b){
+            // Defensive: ensure numeric
+            const at = Number(a.total)||0, bt=Number(b.total)||0, ac=Number(a.covered)||0, bc=Number(b.covered)||0;
+            return { total: at+bt, covered: ac+bc };
+          }
           const metrics = Object.keys(b.total);
           const result={ total:{} };
-          for(const m of metrics){ const merged=merge(b.total[m], f.total[m]); merged.pct=(merged.covered/merged.total*100).toFixed(2); result.total[m]=merged; }
+          for(const m of metrics){
+            const merged=merge(b.total[m], f.total[m]);
+            if(merged.total === 0){
+              // No items of this metric -> treat as fully covered (neutral) to avoid NaN & not penalize
+              merged.pct='100.00';
+            } else {
+              const pct = (merged.covered/merged.total*100);
+              merged.pct = (Number.isFinite(pct)? pct : 0).toFixed(2);
+            }
+            result.total[m]=merged;
+          }
           const thresholds={ lines:80, statements:80, functions:80, branches:80 };
-          const fails=Object.entries(thresholds).filter(([k,v])=> parseFloat(result.total[k].pct)<v).map(([k])=>k+':'+result.total[k].pct);
-          const avg=(Object.values(result.total).reduce((a,m)=>a+parseFloat(m.pct),0)/metrics.length).toFixed(2);
+            // Fail list only considers finite percentages
+          const fails=Object.entries(thresholds).filter(([k,v])=> {
+            const val=parseFloat(result.total[k].pct); return Number.isFinite(val) && val < v;
+          }).map(([k])=>k+':'+result.total[k].pct);
+          const numericPcts = Object.values(result.total).map(m=>parseFloat(m.pct)).filter(Number.isFinite);
+          const avg = (numericPcts.length? (numericPcts.reduce((a,x)=>a+x,0)/numericPcts.length) : 100).toFixed(2);
           fs.mkdirSync('combined-coverage',{recursive:true});
           const avgColor = parseFloat(avg)>=90?'brightgreen':parseFloat(avg)>=80?'green':parseFloat(avg)>=60?'orange':'red';
           fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: avgColor}));
