@@ -1,16 +1,7 @@
 name: CodeQL
 
 on:
-  # Executa após Build (mantém alinhado com artefatos se precisarmos no futuro)
-  workflow_run:
-    workflows: ["Build"]
-    types: [completed]
-  # Análises em PRs para alertar antes do merge
-  pull_request:
-    branches: [ master, develop ]
-  # Opcional: push direto em master/develop (cobertura contínua)
-  push:
-    branches: [ master, develop ]
+  # Mantido apenas agendado semanal + execução manual; removidos triggers de push/PR (orquestrador cobre CodeQL).
   schedule:
     - cron: '0 4 * * 1'
   workflow_dispatch:
@@ -20,32 +11,21 @@ permissions:
   security-events: write
 
 concurrency:
-  group: codeql-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: codeql-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   analyze:
-    # Para workflow_run só roda se build upstream passou; para push/PR/schedule/dispatch roda direto
-    if: >-
-      ${{ github.event_name != 'workflow_run' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
-    name: CodeQL Analyze (${{ matrix.language }})
+    name: CodeQL Analyze (javascript-typescript)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: actions
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
     steps:
-      - name: Checkout (workflow_run / manual)
-        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Setup Node (cache workflow_run / manual)
-        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
@@ -54,37 +34,32 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
 
-      - name: Checkout (scheduled)
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions/checkout@v4
-      - name: Setup Node (cache - scheduled)
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+      - name: Diagnose repository state
+        run: |
+          echo "== git status =="; git status || true
+          echo "== git rev-parse HEAD =="; git rev-parse HEAD || true
+          echo "== top-level files =="; ls -1 | head -50
+          echo "== sample js/ts files =="; find . -maxdepth 4 \( -name '*.js' -o -name '*.ts' \) | head -40
+          COUNT=$(find . -name '*.js' -o -name '*.ts' | wc -l); echo "Total JS/TS files: $COUNT"; if [ "$COUNT" -eq 0 ]; then echo "::warning::Nenhum arquivo JS/TS encontrado no checkout"; fi
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: javascript
+          build-mode: none
           queries: security-extended,security-and-quality
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:javascript"
           upload: true
 
       - name: Backup SARIF artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codeql-sarif-${{ matrix.language }}
+          name: codeql-sarif-javascript
           path: '**/results/*.sarif'
           if-no-files-found: ignore
 
