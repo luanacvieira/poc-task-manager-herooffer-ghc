@@ -11,6 +11,7 @@ permissions:
   contents: write
   security-events: write
   pull-requests: write
+  issues: write
 
 env:
   NODE_VERSION: '20.x'
@@ -307,6 +308,17 @@ jobs:
           echo "Publishing badges for branch ${GITHUB_REF_NAME} (safe=${SAFE_BRANCH})"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          # Sonar Quality Gate badge (attempt fetch)
+          node <<'EOF'
+          const fs = require('fs');
+          const https = require('https');
+          const token = process.env.SONAR_TOKEN;
+          const project = process.env.SONAR_PROJECT_KEY;
+          function writeBadge(msg,color){ fs.writeFileSync('sonar-qg-badge.json', JSON.stringify({schemaVersion:1,label:'quality gate',message:msg,color},null,2)); }
+          if(!token){ writeBadge('skipped','lightgrey'); process.exit(0); }
+          const opts={hostname:'sonarcloud.io',path:'/api/qualitygates/project_status?projectKey='+encodeURIComponent(project),headers:{'Authorization':'Basic '+Buffer.from(token+':').toString('base64')}};
+          https.get(opts,res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);const status=(j.projectStatus&&j.projectStatus.status)||'UNKNOWN';const passed=['OK','SUCCESS'].includes(status);writeBadge(status.toLowerCase(), passed?'green':'red');}catch(e){writeBadge('error','red');}})}).on('error',()=>writeBadge('error','red'));
+          EOF
           git fetch origin badges:badges || true
           if git show-ref --quiet refs/heads/badges; then
             git checkout badges
@@ -322,6 +334,10 @@ jobs:
           if [ -f combined-coverage/coverage-gate-badge.json ]; then
             cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
             cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
+          fi
+          if [ -f sonar-qg-badge.json ]; then
+            cp sonar-qg-badge.json badges/sonar-quality-gate-badge-${SAFE_BRANCH}.json
+            cp sonar-qg-badge.json badges/sonar-quality-gate-badge.json
           fi
           BUILD_STATUS="${{ needs['build-backend'].result }}-${{ needs['build-frontend'].result }}"
           if [ "$BUILD_STATUS" = "success-success" ]; then COLOR=green; MSG=success; else COLOR=red; MSG=fail; fi
@@ -349,3 +365,33 @@ jobs:
           else
             echo "No badge changes to commit"
           fi
+      - name: PR Coverage Delta Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CURRENT_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
+          GATE_STATUS: ${{ needs['coverage-gate'].outputs.coverage_gate }}
+          REPO_FULL: ${{ github.repository }}
+        with:
+          script: |
+            const marker='<!-- coverage-delta -->';
+            const current = parseFloat(process.env.CURRENT_AVG);
+            const baseRef = context.payload.pull_request.base.ref; // base branch
+            const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
+            const url = `https://raw.githubusercontent.com/${process.env.REPO_FULL}/badges/badges/coverage-badge-${safeBase}.json`;
+            let baseVal = null;
+            try {
+              const resp = await fetch(url);
+              if(resp.ok){ const json = await resp.json(); baseVal = parseFloat((json.message||'').replace('%','')); }
+            } catch(e) { /* ignore */ }
+            let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
+            let symbol='';
+            if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
+            const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
+            const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
+            const existing = comments.find(c=> c.body && c.body.includes(marker));
+            if(existing){
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${bodyContent}` });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${bodyContent}` });
+            }
