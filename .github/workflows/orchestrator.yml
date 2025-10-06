@@ -39,12 +39,12 @@ jobs:
       - name: Install root + workspaces deps (peer-safe)
         run: |
           set -e
-          echo "Using peer-deps tolerant install due to eslint 9 + react-hooks plugin peer range.";
+          echo "Installing deps with legacy peer fallback (eslint pinned to 8.57.1 for CRA compatibility).";
           if [ -f package-lock.json ]; then
-            echo "Lockfile exists -> attempting npm ci";
-            npm ci --workspaces || (echo "npm ci failed; falling back to install with legacy peer deps" && npm install --workspaces --legacy-peer-deps)
+            echo "Lockfile exists -> attempting npm ci (workspaces)";
+            npm ci --workspaces || (echo "npm ci failed; falling back to npm install --legacy-peer-deps" && npm install --workspaces --legacy-peer-deps)
           else
-            echo "(No package-lock.json yet) generating with npm install --legacy-peer-deps";
+            echo "(No lockfile) generating one via npm install --legacy-peer-deps (workspaces)";
             npm install --workspaces --legacy-peer-deps
           fi
           echo "Node $(node -v) - npm $(npm -v)"
@@ -65,7 +65,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: TypeScript Check
         working-directory: frontend
         run: npx tsc --noEmit
@@ -83,7 +84,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Run Backend Tests
         working-directory: backend
         run: |
@@ -109,7 +111,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Run Frontend Tests
         working-directory: frontend
         env:
@@ -186,7 +189,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
-        run: npm ci || npm install
+        run: |
+          (npm ci || npm install --legacy-peer-deps)
       - name: Backend smoke
         working-directory: backend
         run: |
@@ -342,12 +346,12 @@ jobs:
       - name: Generate SBOM backend
         working-directory: backend
         run: |
-          npm ci || npm install
+          (npm ci || npm install --legacy-peer-deps)
           npx @cyclonedx/cyclonedx-npm --json --output ../sbom-backend.json || npx cyclonedx-npm --json --output ../sbom-backend.json || echo "(fallback)"
       - name: Generate SBOM frontend
         working-directory: frontend
         run: |
-          npm ci || npm install
+          (npm ci || npm install --legacy-peer-deps)
           npx @cyclonedx/cyclonedx-npm --json --output ../sbom-frontend.json || npx cyclonedx-npm --json --output ../sbom-frontend.json || echo "(fallback)"
       - name: Package SBOMs
         run: |
