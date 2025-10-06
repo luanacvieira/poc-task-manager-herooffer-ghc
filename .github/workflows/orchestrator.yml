@@ -36,13 +36,16 @@ jobs:
             package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Install root + workspaces deps (no lock fallback)
+      - name: Install root + workspaces deps (peer-safe)
         run: |
+          set -e
+          echo "Using peer-deps tolerant install due to eslint 9 + react-hooks plugin peer range.";
           if [ -f package-lock.json ]; then
-            npm ci --workspaces || npm install --workspaces
+            echo "Lockfile exists -> attempting npm ci";
+            npm ci --workspaces || (echo "npm ci failed; falling back to install with legacy peer deps" && npm install --workspaces --legacy-peer-deps)
           else
-            echo "(No package-lock.json yet) running npm install to generate lockfile";
-            npm install --workspaces
+            echo "(No package-lock.json yet) generating with npm install --legacy-peer-deps";
+            npm install --workspaces --legacy-peer-deps
           fi
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
