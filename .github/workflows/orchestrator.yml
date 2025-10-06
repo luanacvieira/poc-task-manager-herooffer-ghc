@@ -309,16 +309,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           # Sonar Quality Gate badge (attempt fetch)
-          node <<'EOF'
-          const fs = require('fs');
-          const https = require('https');
-          const token = process.env.SONAR_TOKEN;
-          const project = process.env.SONAR_PROJECT_KEY;
-          function writeBadge(msg,color){ fs.writeFileSync('sonar-qg-badge.json', JSON.stringify({schemaVersion:1,label:'quality gate',message:msg,color},null,2)); }
-          if(!token){ writeBadge('skipped','lightgrey'); process.exit(0); }
-          const opts={hostname:'sonarcloud.io',path:'/api/qualitygates/project_status?projectKey='+encodeURIComponent(project),headers:{'Authorization':'Basic '+Buffer.from(token+':').toString('base64')}};
-          https.get(opts,res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);const status=(j.projectStatus&&j.projectStatus.status)||'UNKNOWN';const passed=['OK','SUCCESS'].includes(status);writeBadge(status.toLowerCase(), passed?'green':'red');}catch(e){writeBadge('error','red');}})}).on('error',()=>writeBadge('error','red'));
-          EOF
+          node -e "const fs=require('fs');const https=require('https');const token=process.env.SONAR_TOKEN;const project=process.env.SONAR_PROJECT_KEY;const write=(m,c)=>fs.writeFileSync('sonar-qg-badge.json',JSON.stringify({schemaVersion:1,label:'quality gate',message:m,color:c}));if(!token){write('skipped','lightgrey');process.exit(0);}const opts={hostname:'sonarcloud.io',path:'/api/qualitygates/project_status?projectKey='+encodeURIComponent(project),headers:{Authorization:'Basic '+Buffer.from(token+':').toString('base64')}};https.get(opts,res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);const status=(j.projectStatus&&j.projectStatus.status)||'UNKNOWN';const pass=['OK','SUCCESS'].includes(status);write(status.toLowerCase(),pass?'green':'red');}catch(e){write('error','red');}})}).on('error',()=>write('error','red'));"
           git fetch origin badges:badges || true
           if git show-ref --quiet refs/heads/badges; then
             git checkout badges
@@ -344,19 +335,11 @@ jobs:
             echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge-${SAFE_BRANCH}.json
             cp badges/build-status-badge-${SAFE_BRANCH}.json badges/build-status-badge.json
           if [ -f combined-coverage/coverage-metrics.json ]; then
-            HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
+            export HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
             LATEST_FILE=badges/history/coverage-latest-${SAFE_BRANCH}.json
             METRICS=$(cat combined-coverage/coverage-metrics.json)
             echo "$METRICS" > "$LATEST_FILE"
-            node <<'EOF'
-            const fs = require('fs');
-            const path = process.env.HISTORY_FILE;
-            const metrics = JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));
-            let data=[]; try { data = JSON.parse(fs.readFileSync(path,'utf8')); } catch {}
-            data.push({ t: Math.floor(Date.now()/1000), avg: metrics.avg, pass: metrics.pass });
-            data = data.slice(-199);
-            fs.writeFileSync(path, JSON.stringify(data,null,2));
-            EOF
+            node -e "const fs=require('fs');const p=process.env.HISTORY_FILE;const m=JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));let d=[];try{d=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}d.push({t:Math.floor(Date.now()/1000),avg:m.avg,pass:m.pass});d=d.slice(-199);fs.writeFileSync(p, JSON.stringify(d,null,2));"
           fi
           if git status --porcelain | grep -q .; then
             git add badges
