@@ -1,22 +1,7 @@
 name: Static Checks
 
 on:
-  push:
-    # Corrigido 'developr' -> 'develop'. Removido README.md de ignore para que alterações de badge disparem cadeia.
-    branches: [ master, develop, feature/*, release/* ]
-    paths-ignore:
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/pull_request_template.md'
-      - 'LICENSE'
-  pull_request:
-    branches: [ develop, master ]
-    paths-ignore:
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/pull_request_template.md'
-      - 'LICENSE'
-  # Execução manual (permite iniciar cadeia inteira a partir deste ponto)
+  # Desativado para execuções automáticas; mantido apenas manual para demonstração.
   workflow_dispatch:
 
 permissions:
