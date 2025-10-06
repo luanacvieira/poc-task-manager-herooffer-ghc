@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>Project Badges Dashboard</title>
+	<style>
+		body { font-family: Arial, sans-serif; margin: 40px; max-width: 900px; }
+		h1 { margin-top: 0; }
+		.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+		section { border: 1px solid #ccc; padding: 12px; border-radius: 6px; }
+		code { background: #f5f5f5; padding: 2px 4px; border-radius: 4px; font-size: .9em; }
+		small { color: #666; }
+		canvas { max-width: 100%; }
+	</style>
+</head>
+<body>
+	<h1>Badges &amp; Metrics</h1>
+	<p>Visualização simples dos badges JSON publicados na branch <code>badges</code>. Atualize esta página após novos pipelines.</p>
+	<div class="grid">
+		<section>
+			<h3>Coverage (Combined)</h3>
+			<img id="coverageImg" alt="coverage badge" />
+		</section>
+		<section>
+			<h3>Coverage Gate</h3>
+			<img id="gateImg" alt="coverage gate badge" />
+		</section>
+		<section>
+			<h3>Diff Coverage</h3>
+			<img id="diffImg" alt="diff coverage badge" />
+		</section>
+		<section>
+			<h3>Build Status</h3>
+			<img id="buildImg" alt="build badge" />
+		</section>
+	</div>
+	<h2>Historical Coverage</h2>
+	<canvas id="historyChart" height="140"></canvas>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<script>
+		const RAW_BASE = 'https://raw.githubusercontent.com/REPO_OWNER/REPO_NAME/badges/badges';
+		async function load() {
+			const endpoints = { coverage: 'coverage-badge.json', gate: 'coverage-gate-badge.json', diff: 'diff-coverage-badge.json', build: 'build-status-badge.json' };
+			for (const [k, f] of Object.entries(endpoints)) {
+				const id = k === 'coverage' ? 'coverageImg' : k + 'Img';
+				document.getElementById(id).src = `https://img.shields.io/endpoint?url=${RAW_BASE}/${f}`;
+			}
+			const histUrl = `${RAW_BASE}/history/coverage-history-master.json`;
+			try {
+				const resp = await fetch(histUrl);
+				if (!resp.ok) throw new Error('history not found');
+				const hist = await resp.json();
+				const labels = hist.map(h => new Date(h.t * 1000).toLocaleDateString());
+				const data = hist.map(h => parseFloat(h.avg));
+				new Chart(document.getElementById('historyChart'), {
+					type: 'line',
+					data: { labels, datasets: [{ label: 'Coverage Avg %', data, borderColor: '#2c7be5', backgroundColor: 'rgba(44,123,229,0.15)', tension: .25, fill: true }] },
+					options: { responsive: true, scales: { y: { beginAtZero: true, suggestedMax: 100 } } }
+				});
+			} catch (e) {
+				console.log('No history yet', e);
+			}
+		}
+		load();
+	</script>
+	<p><small>Ajuste <code>REPO_OWNER/REPO_NAME</code> neste arquivo para apontar ao repositório real.</small></p>
+</body>
+</html>
