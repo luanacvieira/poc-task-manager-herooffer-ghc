@@ -29,20 +29,16 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Install backend deps
-        working-directory: backend
-        run: npm ci || npm install
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci || npm install
-      - name: ESLint Backend
-        working-directory: backend
-        run: npx eslint .
-      - name: ESLint Frontend
-        working-directory: frontend
-        run: npx eslint src --max-warnings=0 || npx eslint src
+      - name: Install root + workspaces deps
+        run: |
+          npm install --workspaces || npm install
+          echo "Node $(node -v) - npm $(npm -v)"
+      - name: Lint (flat config)
+        run: |
+          npx eslint backend frontend --ext .js,.ts,.tsx
 
   typecheck:
     name: Type Check (Frontend)
@@ -207,7 +203,7 @@ jobs:
           if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
 
   codeql:
-    name: CodeQL Analyze
+    name: Dependabot (alerts/auto-merge)	 Analyze
     runs-on: ubuntu-latest
     needs: [build-frontend]
     permissions:
@@ -263,6 +259,18 @@ jobs:
             -Dsonar.organization=${{ env.SONAR_ORG }}
             -Dsonar.sources=backend/src,frontend/src
             -Dsonar.exclusions=**/node_modules/**,**/coverage/**
+            -Dsonar.javascript.lcov.reportPaths=backend/coverage-unit/lcov.info,frontend/coverage/lcov.info
+            -Dsonar.coverage.exclusions=**/*.test.*,**/tests/**,**/coverage/**,**/jest.config*.js
+      - name: Check Quality Gate
+        if: steps.sonar_guard.outputs.SKIP == 'false'
+        run: |
+          sleep 10
+          STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ env.SONAR_PROJECT_KEY }}" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $STATUS"
+          if [ "$STATUS" != "OK" ] && [ "$STATUS" != "SUCCESS" ]; then
+            echo "::error::Quality Gate failed ($STATUS)"
+            exit 1
+          fi
       - name: Sonar Summary
         run: |
           if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then
