@@ -13,6 +13,6 @@
     "eslint-plugin-security": "^1.7.1"
   },
   "scripts": {
-    "lint": "eslint backend frontend --ext .js,.ts,.tsx"
+    "lint": "eslint backend frontend"
   }
 }
