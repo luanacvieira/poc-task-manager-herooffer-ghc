@@ -23,18 +23,17 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Install backend deps
-        working-directory: backend
-        run: npm ci || npm install
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci || npm install
-      - name: ESLint Backend
-        working-directory: backend
-        run: npx eslint .
-      - name: ESLint Frontend
-        working-directory: frontend
-        run: npx eslint src --max-warnings=0 || npx eslint src
+      - name: Install workspaces (peer-safe)
+        run: |
+          set -e
+          if [ -f package-lock.json ]; then
+            npm ci --workspaces || npm install --workspaces --legacy-peer-deps
+          else
+            npm install --workspaces --legacy-peer-deps
+          fi
+          echo "Node $(node -v) - npm $(npm -v)"
+      - name: Unified ESLint
+        run: npx eslint backend frontend || (echo "Retrying after possible missing modules" && npm install --workspaces --legacy-peer-deps && npx eslint backend frontend)
 
   typecheck:
     name: Type Check (Frontend)
