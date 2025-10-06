@@ -16,6 +16,10 @@ function safeRequire(name, fallback) {
 }
 const tseslint = safeRequire('@typescript-eslint/eslint-plugin');
 const tsParser = safeRequire('@typescript-eslint/parser');
+const hasTsParser = !!(tsParser && (typeof tsParser.parse === 'function' || typeof tsParser.parseForESLint === 'function'));
+if(!hasTsParser){
+  console.warn('[eslint] Warning: valid @typescript-eslint/parser not found. Frontend TS rules will be skipped.');
+}
 const reactPlugin = safeRequire('eslint-plugin-react');
 const reactHooks = safeRequire('eslint-plugin-react-hooks');
 const security = safeRequire('eslint-plugin-security');
@@ -46,26 +50,26 @@ module.exports = [
     }
   },
   // Frontend TS/TSX (React)
-  {
+  hasTsParser ? {
     files: ['frontend/src/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
-  parser: tsParser && tsParser.parse ? tsParser : tsParser, // safe if missing
+      parser: tsParser,
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
         ecmaFeatures: { jsx: true }
       },
-  globals: { ...(globals.browser||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
+      globals: { ...(globals.browser||{}), ...(globals.es2021||{}), ...(globals.jest||{}) }
     },
-    plugins: { '@typescript-eslint': tseslint, react: reactPlugin, 'react-hooks': reactHooks },
+    plugins: { ...(tseslint? {'@typescript-eslint': tseslint}: {}), react: reactPlugin, 'react-hooks': reactHooks },
     rules: {
       ...js.configs.recommended.rules,
-  ...(tseslint.configs?.recommended?.rules||{}),
-  ...(reactPlugin.configs?.recommended?.rules||{}),
-  ...(reactHooks.configs?.recommended?.rules||{}),
+      ...(tseslint?.configs?.recommended?.rules||{}),
+      ...(reactPlugin.configs?.recommended?.rules||{}),
+      ...(reactHooks.configs?.recommended?.rules||{}),
       'react/prop-types': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+      ...(tseslint ? {'@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]} : {})
     },
     settings: { react: { version: 'detect' } }
-  }
-];
+  } : null
+].filter(Boolean);
