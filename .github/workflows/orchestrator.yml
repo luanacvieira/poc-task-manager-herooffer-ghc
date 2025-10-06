@@ -284,9 +284,10 @@ jobs:
           node <<'EOF'
           const fs = require('fs');
           const changedRaw = process.env.CHANGED_LIST.split('\n').filter(Boolean);
+          const threshold = parseFloat(process.env.DIFF_THRESHOLD || '80');
           function walk(dir, out=[]) { for (const e of fs.readdirSync(dir,{withFileTypes:true})){ const p=dir+'/'+e.name; if(e.isDirectory()) walk(p,out); else if(e.isFile()&&e.name==='lcov.info') out.push(p);} return out; }
           const lcovFiles = walk('diff-cov-artifacts');
-          if(!lcovFiles.length){ fs.appendFileSync(process.env.GITHUB_OUTPUT,'pct=0\npass=false\n'); process.exit(0); }
+          if(!lcovFiles.length){ fs.appendFileSync(process.env.GITHUB_OUTPUT,'pct=0\npass=false\n'); process.exit(1); }
           let total=0, covered=0;
           for(const file of lcovFiles){
             const data = fs.readFileSync(file,'utf8').split('\n');
@@ -302,15 +303,19 @@ jobs:
             }
           }
           const pct = total? (covered/total*100).toFixed(2) : '100';
-          const pass = parseFloat(pct) >= 80;
+          const pass = parseFloat(pct) >= threshold;
           fs.mkdirSync('diff-coverage',{recursive:true});
-          const color = parseFloat(pct)>=90?'brightgreen':parseFloat(pct)>=80?'green':parseFloat(pct)>=60?'orange':'red';
+          const color = parseFloat(pct)>=90?'brightgreen':parseFloat(pct)>=threshold?'green':parseFloat(pct)>=60?'orange':'red';
           fs.writeFileSync('diff-coverage/diff-coverage-badge.json', JSON.stringify({schemaVersion:1,label:'diff coverage',message:pct+'%',color}));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `pct=${pct}\npass=${pass}\n`);
-          if(!pass) console.error('Diff coverage below threshold (80%) ->', pct);
+          if(!pass){
+            console.error(`Diff coverage below threshold (${threshold}%) -> ${pct}%`);
+            process.exit(1);
+          }
           EOF
         env:
           CHANGED_LIST: ${{ steps.changed.outputs.list }}
+          DIFF_THRESHOLD: 80
         shell: bash
       - name: Upload Diff Coverage Artifact
         uses: actions/upload-artifact@v4
@@ -498,6 +503,8 @@ jobs:
           CURRENT_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
           GATE_STATUS: ${{ needs['coverage-gate'].outputs.coverage_gate }}
           REPO_FULL: ${{ github.repository }}
+          DIFF_PCT: ${{ needs['diff-coverage'].outputs.diff_pct }}
+          DIFF_PASS: ${{ needs['diff-coverage'].outputs.diff_pass }}
         with:
           script: |
             const marker='<!-- coverage-delta -->';
@@ -513,11 +520,14 @@ jobs:
             let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
             let symbol='';
             if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
+            const diffPct = process.env.DIFF_PCT ? `${process.env.DIFF_PCT}%` : 'n/a';
+            const diffPass = process.env.DIFF_PASS ? (process.env.DIFF_PASS === 'true' ? 'pass' : 'fail') : 'n/a';
             const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
+            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPct} (${diffPass})**`;
             const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             const existing = comments.find(c=> c.body && c.body.includes(marker));
             if(existing){
-              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${bodyContent}` });
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${extended}` });
             } else {
-              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${bodyContent}` });
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${extended}` });
             }
