@@ -48,6 +48,24 @@ jobs:
           SEMGREP_ENABLE_VERSION_CHECK: '0'
           SEMGREP_TIMEOUT: '600'
 
+      - name: Validate SARIF presence
+        run: |
+          if [ ! -f semgrep.sarif ]; then
+            echo "::error::semgrep.sarif não encontrado. Falhando scan."
+            exit 1
+          fi
+          echo "semgrep.sarif encontrado; tamanho:" $(wc -c < semgrep.sarif) "bytes"
+
+      - name: Gate on ERROR findings
+        run: |
+          ERRORS=$(jq '[.runs[].results[]? | select(.level=="error" or .level=="ERROR")] | length' semgrep.sarif || echo 0)
+          echo "Total ERROR findings: $ERRORS"
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Semgrep encontrou $ERRORS findings de severidade ERROR. Bloqueando PR."
+            exit 1
+          fi
+          echo "Nenhum finding ERROR. Gate liberado."
+
       - name: Upload SARIF to code scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
