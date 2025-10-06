@@ -1,8 +1,7 @@
 name: SonarCloud Analysis
 
 on:
-  push:
-    branches: [ master, develop ]
+  # Somente manual agora; Sonar roda no orquestrador.
   workflow_dispatch:
 permissions:
   contents: read

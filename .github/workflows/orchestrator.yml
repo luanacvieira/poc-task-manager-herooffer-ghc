@@ -11,6 +11,7 @@ permissions:
   contents: write
   security-events: write
   pull-requests: write
+  issues: write
 
 env:
   NODE_VERSION: '20.x'
@@ -118,6 +119,9 @@ jobs:
     name: Coverage Gate (>=80%)
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
+    outputs:
+      coverage_avg: ${{ steps.combine.outputs.avg }}
+      coverage_gate: ${{ steps.combine.outputs.gate }}
     steps:
       - uses: actions/checkout@v4
       - name: Download Coverage Artifacts
@@ -125,6 +129,7 @@ jobs:
         with:
           path: coverage-artifacts
       - name: Combine & Enforce Coverage
+        id: combine
         run: |
           set -e
           BACK=$(find coverage-artifacts/backend-coverage -maxdepth 2 -name 'coverage-summary.json' | head -n1 || true)
@@ -143,16 +148,22 @@ jobs:
           for(const m of metrics){ const merged=merge(b.total[m], f.total[m]); merged.pct=(merged.covered/merged.total*100).toFixed(2); result.total[m]=merged; }
           const thresholds={ lines:80, statements:80, functions:80, branches:80 };
           const fails=Object.entries(thresholds).filter(([k,v])=> parseFloat(result.total[k].pct)<v).map(([k])=>k+':'+result.total[k].pct);
-          if(fails.length){ console.error('Coverage gate fail:', fails.join(',')); process.exit(1); }
           const avg=(Object.values(result.total).reduce((a,m)=>a+parseFloat(m.pct),0)/metrics.length).toFixed(2);
           fs.mkdirSync('combined-coverage',{recursive:true});
-          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: parseFloat(avg)>=80?'green':'red'}));
+          const avgColor = parseFloat(avg)>=90?'brightgreen':parseFloat(avg)>=80?'green':parseFloat(avg)>=60?'orange':'red';
+          fs.writeFileSync('combined-coverage/coverage-badge.json', JSON.stringify({schemaVersion:1,label:'coverage (combined)',message:avg+'%',color: avgColor}));
+          const gatePass = fails.length === 0;
+          fs.writeFileSync('combined-coverage/coverage-gate-badge.json', JSON.stringify({schemaVersion:1,label:'coverage gate',message: gatePass? 'pass':'fail',color: gatePass? 'green':'red'}));
+          fs.writeFileSync('combined-coverage/coverage-metrics.json', JSON.stringify({ avg, metrics: result.total, pass: gatePass, fails }, null, 2));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `avg=${avg}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `gate=${gatePass? 'pass':'fail'}\n`);
+          if(fails.length){ console.error('Coverage gate fail:', fails.join(',')); process.exit(1); }
           EOF
-      - name: Upload Combined Coverage Badge
+      - name: Upload Combined Coverage Artifact
         uses: actions/upload-artifact@v4
         with:
           name: combined-coverage
-          path: combined-coverage/coverage-badge.json
+          path: combined-coverage
 
   build-backend:
     name: Build Backend
@@ -275,100 +286,95 @@ jobs:
           echo "Typecheck: ${{ needs.typecheck.result }}" >> $GITHUB_STEP_SUMMARY
           echo "Backend Tests: ${{ needs['test-backend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "Frontend Tests: ${{ needs['test-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-          echo "Coverage Gate: ${{ needs['coverage-gate'].result }}" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage Gate: ${{ needs['coverage-gate'].result }} (avg=${{ needs['coverage-gate'].outputs.coverage_avg }} gate=${{ needs['coverage-gate'].outputs.coverage_gate }})" >> $GITHUB_STEP_SUMMARY
           echo "Build Backend: ${{ needs['build-backend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "Build Frontend: ${{ needs['build-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
           echo "CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
           echo "Sonar: ${{ needs.sonar.result }}" >> $GITHUB_STEP_SUMMARY
-
-    finalize:
-      name: Finalize Summary
-      runs-on: ubuntu-latest
-      needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar]
-      if: always()
-      steps:
-        - name: Summary
-          run: |
-            echo "### Pipeline Orchestrator" >> $GITHUB_STEP_SUMMARY
-            echo "Lint: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Typecheck: ${{ needs.typecheck.result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Backend Tests: ${{ needs['test-backend'].result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Frontend Tests: ${{ needs['test-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Coverage Gate: ${{ needs['coverage-gate'].result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Build Backend: ${{ needs['build-backend'].result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Build Frontend: ${{ needs['build-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-            echo "CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
-            echo "Sonar: ${{ needs.sonar.result }}" >> $GITHUB_STEP_SUMMARY
-                          with:
-                            node-version: ${{ env.NODE_VERSION }}
-                        - name: Init CodeQL
-                          uses: github/codeql-action/init@v3
-                          with:
-                            languages: javascript
-                            build-mode: none
-                        - name: Analyze
-                          uses: github/codeql-action/analyze@v3
-                          with:
-                            category: '/language:javascript'
-
-                    sonar:
-                      name: SonarCloud
-                      # Executa em push OU em PR interno (mesmo repositório). Forks sem secret são ignorados.
-                      if: >-
-                        ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
-                      runs-on: ubuntu-latest
-                      needs: [build-frontend]
-                      steps:
-                        - uses: actions/checkout@v4
-                        - uses: actions/setup-node@v4
-                          with:
-                            node-version: ${{ env.NODE_VERSION }}
-                        - name: Guard (skip if SONAR_TOKEN missing)
-                          id: sonar_guard
-                          run: |
-                            if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
-                              echo "SKIP=true" >> $GITHUB_OUTPUT
-                              echo "::warning::SONAR_TOKEN ausente - ignorando análise Sonar (fork ou secret ausente).";
-                            else
-                              echo "SKIP=false" >> $GITHUB_OUTPUT
-                            fi
-                        - name: SonarCloud Scan
-                          if: steps.sonar_guard.outputs.SKIP == 'false'
-                          uses: SonarSource/sonarcloud-github-action@v2
-                          env:
-                            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-                          with:
-                            args: >-
-                              -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
-                              -Dsonar.organization=${{ env.SONAR_ORG }}
-                              -Dsonar.sources=backend/src,frontend/src
-                              -Dsonar.exclusions=**/node_modules/**,**/coverage/**
-                        - name: Sonar Summary
-                          run: |
-                            if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then
-                              echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
-                              echo "Análise ignorada (fork ou secret ausente)." >> $GITHUB_STEP_SUMMARY
-                            else
-                              echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
-                              echo "Análise executada." >> $GITHUB_STEP_SUMMARY
-                            fi
-
-                    finalize:
-                      name: Finalize Summary
-                      runs-on: ubuntu-latest
-                      needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar]
-                      if: always()
-                      steps:
-                        - name: Summary
-                          run: |
-                            echo "### Pipeline Orchestrator" >> $GITHUB_STEP_SUMMARY
-                            echo "Lint: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Typecheck: ${{ needs.typecheck.result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Backend Tests: ${{ needs['test-backend'].result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Frontend Tests: ${{ needs['test-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Coverage Gate: ${{ needs['coverage-gate'].result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Build Backend: ${{ needs['build-backend'].result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Build Frontend: ${{ needs['build-frontend'].result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
-                            echo "Sonar: ${{ needs.sonar.result }}" >> $GITHUB_STEP_SUMMARY
+      - name: Checkout (for badges)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+      - name: Download Combined Coverage Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: combined-coverage
+          path: combined-coverage
+      - name: Publish Badges (push events only)
+        if: github.event_name == 'push'
+        run: |
+          set -e
+          SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+          echo "Publishing badges for branch ${GITHUB_REF_NAME} (safe=${SAFE_BRANCH})"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          # Sonar Quality Gate badge (attempt fetch)
+          node -e "const fs=require('fs');const https=require('https');const token=process.env.SONAR_TOKEN;const project=process.env.SONAR_PROJECT_KEY;const write=(m,c)=>fs.writeFileSync('sonar-qg-badge.json',JSON.stringify({schemaVersion:1,label:'quality gate',message:m,color:c}));if(!token){write('skipped','lightgrey');process.exit(0);}const opts={hostname:'sonarcloud.io',path:'/api/qualitygates/project_status?projectKey='+encodeURIComponent(project),headers:{Authorization:'Basic '+Buffer.from(token+':').toString('base64')}};https.get(opts,res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);const status=(j.projectStatus&&j.projectStatus.status)||'UNKNOWN';const pass=['OK','SUCCESS'].includes(status);write(status.toLowerCase(),pass?'green':'red');}catch(e){write('error','red');}})}).on('error',()=>write('error','red'));"
+          git fetch origin badges:badges || true
+          if git show-ref --quiet refs/heads/badges; then
+            git checkout badges
+          else
+            git checkout --orphan badges
+            git reset --hard
+          fi
+          mkdir -p badges/history
+          if [ -f combined-coverage/coverage-badge.json ]; then
+            cp combined-coverage/coverage-badge.json badges/coverage-badge-${SAFE_BRANCH}.json
+            cp combined-coverage/coverage-badge.json badges/coverage-badge.json
+          fi
+          if [ -f combined-coverage/coverage-gate-badge.json ]; then
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge-${SAFE_BRANCH}.json
+            cp combined-coverage/coverage-gate-badge.json badges/coverage-gate-badge.json
+          fi
+          if [ -f sonar-qg-badge.json ]; then
+            cp sonar-qg-badge.json badges/sonar-quality-gate-badge-${SAFE_BRANCH}.json
+            cp sonar-qg-badge.json badges/sonar-quality-gate-badge.json
+          fi
+          BUILD_STATUS="${{ needs['build-backend'].result }}-${{ needs['build-frontend'].result }}"
+          if [ "$BUILD_STATUS" = "success-success" ]; then COLOR=green; MSG=success; else COLOR=red; MSG=fail; fi
+            echo "{ \"schemaVersion\":1, \"label\":\"build\", \"message\":\"${MSG}\", \"color\":\"${COLOR}\" }" > badges/build-status-badge-${SAFE_BRANCH}.json
+            cp badges/build-status-badge-${SAFE_BRANCH}.json badges/build-status-badge.json
+          if [ -f combined-coverage/coverage-metrics.json ]; then
+            export HISTORY_FILE=badges/history/coverage-history-${SAFE_BRANCH}.json
+            LATEST_FILE=badges/history/coverage-latest-${SAFE_BRANCH}.json
+            METRICS=$(cat combined-coverage/coverage-metrics.json)
+            echo "$METRICS" > "$LATEST_FILE"
+            node -e "const fs=require('fs');const p=process.env.HISTORY_FILE;const m=JSON.parse(fs.readFileSync('combined-coverage/coverage-metrics.json','utf8'));let d=[];try{d=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}d.push({t:Math.floor(Date.now()/1000),avg:m.avg,pass:m.pass});d=d.slice(-199);fs.writeFileSync(p, JSON.stringify(d,null,2));"
+          fi
+          if git status --porcelain | grep -q .; then
+            git add badges
+            git commit -m "chore(badges): update badges for ${GITHUB_REF_NAME}" || echo "Nothing to commit"
+            git push origin badges
+          else
+            echo "No badge changes to commit"
+          fi
+      - name: PR Coverage Delta Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CURRENT_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
+          GATE_STATUS: ${{ needs['coverage-gate'].outputs.coverage_gate }}
+          REPO_FULL: ${{ github.repository }}
+        with:
+          script: |
+            const marker='<!-- coverage-delta -->';
+            const current = parseFloat(process.env.CURRENT_AVG);
+            const baseRef = context.payload.pull_request.base.ref; // base branch
+            const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
+            const url = `https://raw.githubusercontent.com/${process.env.REPO_FULL}/badges/badges/coverage-badge-${safeBase}.json`;
+            let baseVal = null;
+            try {
+              const resp = await fetch(url);
+              if(resp.ok){ const json = await resp.json(); baseVal = parseFloat((json.message||'').replace('%','')); }
+            } catch(e) { /* ignore */ }
+            let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
+            let symbol='';
+            if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
+            const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
+            const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
+            const existing = comments.find(c=> c.body && c.body.includes(marker));
+            if(existing){
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body: `${marker}\n${bodyContent}` });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${bodyContent}` });
+            }
