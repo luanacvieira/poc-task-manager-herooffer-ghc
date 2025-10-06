@@ -362,13 +362,7 @@ jobs:
           mv sbom-backend.json sbom/backend.json 2>/dev/null || true
           mv sbom-frontend.json sbom/frontend.json 2>/dev/null || true
           if [ -f sbom/backend.json ] && [ -f sbom/frontend.json ]; then
-            node <<'EOF'
-            const fs=require('fs');
-            const back=JSON.parse(fs.readFileSync('sbom/backend.json','utf8'));
-            const front=JSON.parse(fs.readFileSync('sbom/frontend.json','utf8'));
-            const combined={ bomFormat:'CycloneDX', specVersion: back.specVersion||front.specVersion||'1.5', version:1, metadata:{ tools:[...(back.metadata?.tools||[]), ...(front.metadata?.tools||[])] }, components:[...(back.components||[]), ...(front.components||[])] };
-            fs.writeFileSync('sbom/combined.json', JSON.stringify(combined,null,2));
-            EOF
+            node -e "const fs=require('fs');const back=JSON.parse(fs.readFileSync('sbom/backend.json','utf8'));const front=JSON.parse(fs.readFileSync('sbom/frontend.json','utf8'));const combined={bomFormat:'CycloneDX',specVersion:back.specVersion||front.specVersion||'1.5',version:1,metadata:{tools:[...(back.metadata?.tools||[]),...(front.metadata?.tools||[])]},components:[...(back.components||[]),...(front.components||[])]};fs.writeFileSync('sbom/combined.json',JSON.stringify(combined,null,2));console.log('Combined SBOM written to sbom/combined.json');"
           fi
           ls -l sbom
       - name: Upload SBOM
