@@ -544,22 +544,36 @@ jobs:
         with:
           script: |
             const marker='<!-- coverage-delta -->';
-            const current = parseFloat(process.env.CURRENT_AVG);
+            const safeNumber = (val) => { const n = parseFloat(val); return Number.isFinite(n) ? n : null; };
+            const currentRaw = process.env.CURRENT_AVG;
+            const currentNum = safeNumber(currentRaw);
             const baseRef = context.payload.pull_request.base.ref; // base branch
             const safeBase = baseRef.replace(/[\\/]/g,'-').toLowerCase();
             const url = `https://raw.githubusercontent.com/${process.env.REPO_FULL}/badges/badges/coverage-badge-${safeBase}.json`;
             let baseVal = null;
             try {
               const resp = await fetch(url);
-              if(resp.ok){ const json = await resp.json(); baseVal = parseFloat((json.message||'').replace('%','')); }
-            } catch(e) { /* ignore */ }
-            let delta = baseVal==null? 'n/a' : (current - baseVal).toFixed(2);
-            let symbol='';
-            if(baseVal!=null){ const d=current-baseVal; symbol = d>0?'▲': d<0?'▼':'='; }
-            const diffPct = process.env.DIFF_PCT ? `${process.env.DIFF_PCT}%` : 'n/a';
-            const diffPass = process.env.DIFF_PASS ? (process.env.DIFF_PASS === 'true' ? 'pass' : 'fail') : 'n/a';
-            const bodyContent = `### Coverage Delta\nCurrent (PR): **${current}%**\nBase (${baseRef}): **${baseVal!=null? baseVal+'%':'unavailable'}**\nDelta: **${symbol} ${delta}%**\nGate (>=80%): **${process.env.GATE_STATUS}**`;
-            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPct} (${diffPass})**`;
+              if(resp.ok){
+                const json = await resp.json();
+                baseVal = safeNumber((json.message||'').replace('%',''));
+              }
+            } catch(e) { /* ignore fetch errors */ }
+            let deltaVal = null; let symbol='';
+            if(currentNum!=null && baseVal!=null){
+              deltaVal = currentNum - baseVal;
+              symbol = deltaVal>0?'▲': deltaVal<0?'▼':'=';
+            }
+            const gateStatus = (process.env.GATE_STATUS || '').trim();
+            const gateDisplay = gateStatus ? gateStatus : 'unknown';
+            const currentDisplay = currentNum!=null ? currentNum.toFixed(2)+'%' : 'unavailable';
+            const baseDisplay = baseVal!=null ? baseVal.toFixed(2)+'%' : 'unavailable';
+            const deltaDisplay = (deltaVal==null? 'n/a' : `${symbol} ${deltaVal.toFixed(2)}%`);
+            const diffPctRaw = safeNumber(process.env.DIFF_PCT);
+            const diffPctDisplay = diffPctRaw!=null ? diffPctRaw.toFixed(2)+'%' : 'n/a';
+            const diffPassEnv = process.env.DIFF_PASS;
+            const diffPassDisplay = diffPctRaw==null ? 'n/a' : (diffPassEnv === 'true' ? 'pass' : 'fail');
+            const bodyContent = `### Coverage Delta\nCurrent (PR): **${currentDisplay}**\nBase (${baseRef}): **${baseDisplay}**\nDelta: **${deltaDisplay}**\nGate (>=80%): **${gateDisplay}**`;
+            const extended = bodyContent + `\nDiff Coverage (>=80%): **${diffPctDisplay} (${diffPassDisplay})**`;
             const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
             const existing = comments.find(c=> c.body && c.body.includes(marker));
             if(existing){
