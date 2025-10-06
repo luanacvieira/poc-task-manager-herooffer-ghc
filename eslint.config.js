@@ -1,15 +1,13 @@
 // Flat ESLint config (ESLint v9+) consolidating backend (JS) and frontend (TS/React)
-import js from '@eslint/js';
-import globals from 'globals';
+const js = require('@eslint/js');
+const globals = require('globals');
+const tseslint = require('@typescript-eslint/eslint-plugin');
+const tsParser = require('@typescript-eslint/parser');
+const reactPlugin = require('eslint-plugin-react');
+const reactHooks = require('eslint-plugin-react-hooks');
+const security = require('eslint-plugin-security');
 
-// React / TS plugins still use CommonJS export style; import via require() fallback when needed
-import tseslint from '@typescript-eslint/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import reactPlugin from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
-import security from 'eslint-plugin-security';
-
-export default [
+module.exports = [
   {
     ignores: [
       'node_modules/**',
