@@ -203,7 +203,7 @@ jobs:
           if npm run | grep -q build; then npm run build; else echo "(no build script)"; fi
 
   codeql:
-    name: Dependabot (alerts/auto-merge)	 Analyze
+    name: CodeQL Analyze
     runs-on: ubuntu-latest
     needs: [build-frontend]
     permissions:
@@ -219,10 +219,18 @@ jobs:
         with:
           languages: javascript
           build-mode: none
+        env:
+          CODEQL_ACTION_DEBUG: true
       - name: Analyze
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:javascript'
+        env:
+          CODEQL_ACTION_DEBUG: true
+      - name: CodeQL SARIF existence debug
+        run: |
+          ls -R ./codeql* || true
+          echo "Listing uploaded SARIF (post-action cannot access, but we verify working directory)."
 
   sonar:
     name: SonarCloud
