@@ -1,4 +1,4 @@
-name: Static Checks
+name: Static Checks (LEGACY)
 
 on:
   push:
