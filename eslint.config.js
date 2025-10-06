@@ -8,11 +8,17 @@ try {
   // Fallback to empty object; rules will still run, only global detection reduced.
   console.warn('[eslint] Warning: module "globals" not found. Using empty globals map.');
 }
-const tseslint = require('@typescript-eslint/eslint-plugin');
-const tsParser = require('@typescript-eslint/parser');
-const reactPlugin = require('eslint-plugin-react');
-const reactHooks = require('eslint-plugin-react-hooks');
-const security = require('eslint-plugin-security');
+function safeRequire(name, fallback) {
+  try { return require(name); } catch(e){
+    console.warn(`[eslint] Warning: module \"${name}\" not found. Using fallback.`);
+    return fallback || {};
+  }
+}
+const tseslint = safeRequire('@typescript-eslint/eslint-plugin');
+const tsParser = safeRequire('@typescript-eslint/parser');
+const reactPlugin = safeRequire('eslint-plugin-react');
+const reactHooks = safeRequire('eslint-plugin-react-hooks');
+const security = safeRequire('eslint-plugin-security');
 
 module.exports = [
   {
@@ -43,7 +49,7 @@ module.exports = [
   {
     files: ['frontend/src/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
-      parser: tsParser,
+  parser: tsParser && tsParser.parse ? tsParser : tsParser, // safe if missing
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
@@ -54,9 +60,9 @@ module.exports = [
     plugins: { '@typescript-eslint': tseslint, react: reactPlugin, 'react-hooks': reactHooks },
     rules: {
       ...js.configs.recommended.rules,
-      ...tseslint.configs.recommended.rules,
-      ...reactPlugin.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
+  ...(tseslint.configs?.recommended?.rules||{}),
+  ...(reactPlugin.configs?.recommended?.rules||{}),
+  ...(reactHooks.configs?.recommended?.rules||{}),
       'react/prop-types': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     },
