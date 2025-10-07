@@ -2,7 +2,7 @@ name: Analytics Dashboard
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+  - cron: '0 3 * * *'   # Diariamente 03:00 UTC
   workflow_dispatch:
   push:
     branches: [ master, develop ]
