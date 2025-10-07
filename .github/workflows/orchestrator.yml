@@ -53,8 +53,13 @@ jobs:
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
-          # Fail build on any warning to surface unused vars etc.
-          npx eslint backend frontend --max-warnings=0
+          echo "::add-matcher::.github/matchers/eslint-unix.json"
+          echo "[Lint Debug] Listando arquivos alvo (backend JS, frontend TS/JS)";
+          ls -1 backend/src 2>/dev/null || true
+          ls -1 frontend/src 2>/dev/null || true
+          echo "[Lint Debug] Versões:"; node -v; npx eslint -v
+          # Formato unix garante parsing pelo matcher
+          npx eslint backend frontend --format unix --max-warnings=0
 
   typecheck:
     name: Type Check (Frontend)
