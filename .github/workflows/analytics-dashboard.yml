@@ -27,11 +27,22 @@ jobs:
           fetch-depth: 0
       - name: Fetch branch de métricas (badges)
         run: |
-          git fetch origin $TARGET_BRANCH || echo "Sem branch de badges ainda"
+          set -e
+          git fetch origin $TARGET_BRANCH || true
           if git show-ref --verify --quiet refs/remotes/origin/$TARGET_BRANCH; then
+            echo "Branch $TARGET_BRANCH existente – criando worktree."
             git worktree add _badges_worktree origin/$TARGET_BRANCH
           else
-            mkdir -p _badges_worktree/badges/history
+            echo "Branch $TARGET_BRANCH inexistente – criando nova (orphan)."
+            git worktree add -b $TARGET_BRANCH _badges_worktree || true
+            (
+              cd _badges_worktree
+              if [ ! -d .git ]; then echo "Worktree não inicializado corretamente"; fi
+              mkdir -p badges/history docs/analytics-dashboard
+              git add . || true
+              git commit --allow-empty -m "chore(badges): inicializar branch de métricas" || true
+              git push origin HEAD:$TARGET_BRANCH || true
+            )
           fi
       - name: Instalar dependências mínimas (se necessário)
         run: |
@@ -43,17 +54,34 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node ./scripts/generate-analytics-dashboard.js
-      - name: Publicar dashboard no repositório
+      - name: Publicar dashboard na branch de métricas (badges)
         run: |
           set -e
-          if git status --porcelain | grep -q .; then
-            git config user.name 'github-actions'
-            git config user.email 'actions@github.com'
-            git add $DASHBOARD_DIR analytics/metrics.json || true
-            git commit -m 'chore(analytics): atualizar dashboard analítico'
-            git push origin HEAD:${GITHUB_REF_NAME}
-          else
-            echo "Nenhuma alteração para dashboard."
+          if [ ! -d _badges_worktree ]; then echo "Worktree de badges não encontrada"; exit 0; fi
+          # Copiar artefatos gerados para a worktree
+          mkdir -p _badges_worktree/docs/analytics-dashboard
+          cp -R $DASHBOARD_DIR/* _badges_worktree/docs/analytics-dashboard/ 2>/dev/null || true
+          if [ -f analytics/metrics.json ]; then
+            mkdir -p _badges_worktree/analytics
+            cp analytics/metrics.json _badges_worktree/analytics/metrics.json
+          fi
+          (
+            cd _badges_worktree
+            if git status --porcelain | grep -q .; then
+              git config user.name 'github-actions'
+              git config user.email 'actions@github.com'
+              git add docs/analytics-dashboard analytics/metrics.json || true
+              git commit -m 'chore(analytics): atualizar dashboard analítico'
+              # Push com uma tentativa de rebase para evitar rejeição por corrida
+              git push origin HEAD:$TARGET_BRANCH || (
+                echo "Primeiro push falhou – tentando pull --rebase e retry";
+                git pull --rebase origin $TARGET_BRANCH || true;
+                git push origin HEAD:$TARGET_BRANCH || echo "Falha ao enviar dashboard (segunda tentativa)";
+              )
+            else
+              echo "Nenhuma alteração para dashboard (branch $TARGET_BRANCH)."
+            fi
+          )
           fi
       # Passo opcional (desabilitado): Publicar em gh-pages
       # - name: Publicar em gh-pages
