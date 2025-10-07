@@ -19,7 +19,8 @@ jobs:
     env:
       REPO: ${{ github.repository }}
       BADGE_BRANCH: badges
-      BRANCHES_TO_CHECK: master develop feature-betterrole-with-tests1
+      # Apenas branches que atualmente produzem badges branch-específicos.
+      BRANCHES_TO_CHECK: feature-betterrole-with-tests1
     steps:
       - name: Prepare URL list
         id: gen
@@ -33,15 +34,19 @@ jobs:
           add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-gate-badge.json"
           # Build generic may exist after build workflow
           add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/build-status-badge.json"
-          # Per-branch badges
+          # Per-branch badges (somente se branch gerar arquivos com sufixo)
           for B in $BRANCHES_TO_CHECK; do
             SAFE=$(echo "$B" | tr '/:' '-')
             add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-badge-${SAFE}.json"
             add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/coverage-gate-badge-${SAFE}.json"
             add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/build-status-badge-${SAFE}.json"
-            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/history/coverage-history-${SAFE}.json"
-            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/history/coverage-latest-${SAFE}.json"
+            # Histórico diferencial e cobertura (nomes atuais presentes na branch badges)
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/coverage-history-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/coverage-latest-${SAFE}.json"
+            add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/diff-coverage-history-${SAFE}.json"
           done
+          # Histórico agregado global (se existir)
+          add "https://raw.githubusercontent.com/${REPO}/${BADGE_BRANCH}/badges/diff-coverage-badge.json"
           echo "urls=$(paste -sd ',' $LIST_FILE)" >> $GITHUB_OUTPUT
       - name: Fetch & validate
         run: |
