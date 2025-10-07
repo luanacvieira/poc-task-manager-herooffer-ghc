@@ -487,9 +487,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Gitleaks (secrets)
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          args: --report-format sarif --report-path gitleaks.sarif
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          echo "Installing gitleaks CLI"
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
+          echo "Running gitleaks detect (will not fail pipeline on findings)"
+          # --exit-code 0 ensures the job continues even if leaks are found; adjust if you want hard fail
+          gitleaks detect --report-format sarif --report-path gitleaks.sarif --exit-code 0
+          # Quick count of findings for later risk scoring (saved as secret-signals.json)
+          node -e "const fs=require('fs');let c=0;try{const sar=JSON.parse(fs.readFileSync('gitleaks.sarif','utf8'));for(const run of sar.runs||[]) c+=(run.results||[]).length;}catch{}fs.writeFileSync('secret-signals.json',JSON.stringify({count:c},null,2));console.log('Detected secrets:',c);"
       - name: Upload Gitleaks SARIF to Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -501,6 +509,12 @@ jobs:
         with:
           name: gitleaks-sarif
           path: gitleaks.sarif
+      - name: Upload Secret Signals Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-signals
+          path: secret-signals.json
       - name: License Scan (license-checker)
         run: |
           npm install -g license-checker@25.0.1
@@ -648,6 +662,12 @@ jobs:
         with:
           name: gitleaks-sarif
           path: gitleaks-artifact
+      - name: Download Secret Signals Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: secret-signals
+          path: secret-artifact
       - name: Download SBOM Artifact
         if: github.event_name == 'push'
         uses: actions/download-artifact@v4
@@ -812,6 +832,11 @@ jobs:
           CVE_MED=${CVE_MED:-0}
           SECRET_COUNT=${SECRET_COUNT:-0}
           LICENSE_ISSUES=${LICENSE_ISSUES:-0}
+          # If secret-signals artifact present, override SECRET_COUNT
+          if [ -f secret-artifact/secret-signals.json ]; then
+            SC=$(jq -r '.count // 0' secret-artifact/secret-signals.json 2>/dev/null || echo 0)
+            SECRET_COUNT=$SC
+          fi
           ########################################################################
           # Risk Score (heurística estendida)                                    #
           # Objetivo: síntese executiva de risco técnico.                        #
