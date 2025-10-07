@@ -82,7 +82,9 @@ jobs:
               echo "Nenhuma alteração para dashboard (branch $TARGET_BRANCH)."
             fi
           )
-          fi
+          # Cleanup opcional: remover worktree para não poluir workspace de runner
+          git worktree prune || true
+          rm -rf _badges_worktree || true
       # Passo opcional (desabilitado): Publicar em gh-pages
       # - name: Publicar em gh-pages
       #   if: ${{ false }}
