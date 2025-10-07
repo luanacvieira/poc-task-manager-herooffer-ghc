@@ -483,6 +483,12 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
+      - name: Upload Semgrep SARIF Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
 
   package-backend:
     name: Build & Publish Backend Image (GHCR)
@@ -567,12 +573,199 @@ jobs:
         with:
           name: diff-coverage
           path: diff-coverage
+      - name: Download Semgrep SARIF Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep-artifact
+      - name: Collect Security Signals (severity & aging)
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO="${GITHUB_REPOSITORY}"
+          echo "Collecting Code Scanning alerts (CodeQL + Semgrep uploaded)";
+          # Code Scanning Alerts (open)
+          CODE_SCANNING_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/code-scanning/alerts?state=open&per_page=100") || CODE_SCANNING_JSON='[]'
+          echo "$CODE_SCANNING_JSON" | jq '.' >/dev/null 2>&1 || CODE_SCANNING_JSON='[]'
+          CRIT=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="critical")] | length')
+          HIGH=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="high")] | length')
+          MED=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="medium")] | length')
+          LOW=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="low")] | length')
+          # Semgrep SARIF results severity fallback (if not surfaced in code scanning metadata)
+          if [ -f semgrep-artifact/semgrep.sarif ]; then
+            SEMGREP_CRIT=$(jq '[.runs[].results[] | select(.rule.severity=="ERROR")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            SEMGREP_HIGH=$(jq '[.runs[].results[] | select(.rule.severity=="WARNING")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            SEMGREP_MED=$(jq '[.runs[].results[] | select(.rule.severity=="INFO")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            # Merge (sum) if GitHub code scanning did not map them
+            CRIT=$((CRIT+SEMGREP_CRIT))
+            HIGH=$((HIGH+SEMGREP_HIGH))
+            MED=$((MED+SEMGREP_MED))
+          fi
+          mkdir -p badges/history
+          CATALOG=badges/history/alerts-catalog.json
+          NOW_TS=$(date +%s)
+          node <<'EOF'
+          const fs=require('fs');
+          const now=parseInt(process.env.NOW_TS,10);
+          const catalogFile=process.env.CATALOG;
+          let catalog={};
+            try{ catalog=JSON.parse(fs.readFileSync(catalogFile,'utf8')); }catch{}
+          // Build set of current alert IDs from code scanning
+          let currentIds=new Set();
+          try {
+            const alerts = JSON.parse(process.env.CODE_SCANNING_JSON || '[]');
+            for(const a of alerts){
+              const id = `cs:${a.number||a.rule?.id||'unknown'}`;
+              currentIds.add(id);
+              if(!catalog[id]) catalog[id]={ firstSeen: now };
+            }
+          } catch(e){ /* ignore */ }
+          // Semgrep SARIF granular IDs
+          try {
+            if(fs.existsSync('semgrep-artifact/semgrep.sarif')){
+              const sarif=JSON.parse(fs.readFileSync('semgrep-artifact/semgrep.sarif','utf8'));
+              for(const run of sarif.runs||[]){
+                for(const r of run.results||[]){
+                  const loc=(r.locations&&r.locations[0]&&r.locations[0].physicalLocation)||{};
+                  const file=loc.artifactLocation?.uri||'unknown';
+                  const line=loc.region?.startLine||0;
+                  const ruleId=r.ruleId||'rule';
+                  const id=`sg:${ruleId}:${file}:${line}`;
+                  currentIds.add(id);
+                  if(!catalog[id]) catalog[id]={ firstSeen: now };
+                }
+              }
+            }
+          } catch(e){ /* ignore */ }
+          // Aging calc (only open alerts we still see)
+          let ages=[];
+          for(const id of currentIds){
+            const meta=catalog[id];
+            if(meta && meta.firstSeen){
+              const ageDays=(now - meta.firstSeen)/86400;
+              ages.push(ageDays);
+            }
+          }
+          const agingDays = ages.length? (ages.reduce((a,b)=>a+b,0)/ages.length) : 0;
+          fs.writeFileSync(catalogFile, JSON.stringify(catalog,null,2));
+          // Export summary JSON
+          const summary={ critical: parseInt(process.env.CRIT,10)||0, high: parseInt(process.env.HIGH,10)||0, medium: parseInt(process.env.MED,10)||0, low: parseInt(process.env.LOW,10)||0, agingDays: parseFloat(agingDays.toFixed(2)) };
+          fs.writeFileSync('badges/security-signals.json', JSON.stringify(summary,null,2));
+          // Write env file append for next step
+          fs.appendFileSync(process.env.GITHUB_ENV, `CRIT_COUNT=${summary.critical}\nHIGH_COUNT=${summary.high}\nMED_COUNT=${summary.medium}\nAGING_DAYS=${summary.agingDays}\n`);
+          EOF
+          echo "Security signals collected: CRIT=$CRIT HIGH=$HIGH MED=$MED LOW=$LOW"
+          # Keep raw JSON for node script
+          printf '%s' "$CODE_SCANNING_JSON" > code-scanning-alerts.json
+          # Persist env counts for node (added inside node too for redundancy)
+          echo "CRIT_COUNT=$CRIT" >> $GITHUB_ENV
+          echo "HIGH_COUNT=$HIGH" >> $GITHUB_ENV
+          echo "MED_COUNT=$MED" >> $GITHUB_ENV
+          echo "LOW_COUNT=$LOW" >> $GITHUB_ENV
+          # Aging already appended by node
       - name: Publish Badges (push events only)
         if: github.event_name == 'push'
         run: |
           set -e
           SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
           mkdir -p badges/history
+          ########################################################################
+          # Risk Score (heurística estendida)                                    #
+          # Objetivo: síntese executiva de risco técnico.                        #
+          # Fórmula (base 100 - penalidades):                                    #
+          #  Coverage gate fail: -30                                             #
+          #  Cobertura média <85: -10 | [85,90): -5                              #
+          #  Diff coverage <80: -15 | [80,90): -5                                #
+          #  CodeQL não success: -15                                             #
+          #  Semgrep não success: -10                                            #
+          #  Sonar não success: -10                                              #
+          #  ALERTAS (SARIF + Sonar) severidade: Critical:-12 High:-8 Medium:-4  #
+          #  Aging médio (dias) alertas (se disponível):                         #
+          #     >14d:-10  >7d:-6  >3d:-3                                         #
+          #  Penalização máxima combinada por severidades limitada a 40          #
+          #  Clamped 0..100                                                      #
+          # Observação: Aging / severidades obtidos de artefatos se presentes;   #
+          # caso contrário, assumidos como zero (não penaliza).                  #
+          ########################################################################
+          COV_AVG="${{ needs['coverage-gate'].outputs.coverage_avg }}"
+          COV_GATE="${{ needs['coverage-gate'].outputs.coverage_gate }}"
+          DIFF_PCT="${{ needs['diff-coverage'].outputs.diff_pct }}"
+          CODEQL_RESULT="${{ needs.codeql.result }}"
+            SONAR_RESULT="${{ needs.sonar.result }}"
+          SEMGREP_RESULT="${{ needs.semgrep.result }}"
+          risk=100
+          # Coverage gate
+          if [ "${COV_GATE}" = "fail" ]; then risk=$((risk-30)); fi
+          # Coverage average numeric check
+          if echo "$COV_AVG" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+            cov_int=${COV_AVG%.*}
+            awk 'BEGIN{exit !( '$COV_AVG' < 85 )}' || risk=$((risk-10))
+            awk 'BEGIN{exit !( '$COV_AVG' >= 85 && '$COV_AVG' < 90 )}' && risk=$((risk-5)) || true
+          fi
+          # Diff coverage
+          if echo "$DIFF_PCT" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+            awk 'BEGIN{exit !( '$DIFF_PCT' < 80 )}' || risk=$((risk-15))
+            awk 'BEGIN{exit !( '$DIFF_PCT' >= 80 && '$DIFF_PCT' < 90 )}' && risk=$((risk-5)) || true
+          fi
+          # Tool results (treat success vs others)
+          [ "$CODEQL_RESULT" = "success" ] || risk=$((risk-15))
+          [ "$SEMGREP_RESULT" = "success" ] || risk=$((risk-10))
+          [ "$SONAR_RESULT" = "success" ] || risk=$((risk-10))
+          # Clamp
+          if [ $risk -lt 0 ]; then risk=0; fi
+          if [ $risk -gt 100 ]; then risk=100; fi
+          # Color scale
+          if [ $risk -ge 90 ]; then RISK_COLOR=brightgreen; elif [ $risk -ge 75 ]; then RISK_COLOR=green; elif [ $risk -ge 60 ]; then RISK_COLOR=yellow; elif [ $risk -ge 40 ]; then RISK_COLOR=orange; else RISK_COLOR=red; fi
+          mkdir -p badges
+          # --- Coleta simplificada de severidades (placeholders se SARIF/sonar summary indisponíveis) ---
+          critical=${CRIT_COUNT:-0}; high=${HIGH_COUNT:-0}; medium=${MED_COUNT:-0}
+          aging_days=${AGING_DAYS:-0}
+          sev_penalty=0
+          sev_penalty=$((sev_penalty + critical*12 + high*8 + medium*4))
+          if [ $sev_penalty -gt 40 ]; then sev_penalty=40; fi
+          risk=$((risk - sev_penalty))
+          if [ $aging_days -gt 14 ]; then risk=$((risk-10)); elif [ $aging_days -gt 7 ]; then risk=$((risk-6)); elif [ $aging_days -gt 3 ]; then risk=$((risk-3)); fi
+          if [ $risk -lt 0 ]; then risk=0; fi
+          if [ $risk -gt 100 ]; then risk=100; fi
+          # Color scale
+          if [ $risk -ge 90 ]; then RISK_COLOR=brightgreen; elif [ $risk -ge 75 ]; then RISK_COLOR=green; elif [ $risk -ge 60 ]; then RISK_COLOR=yellow; elif [ $risk -ge 40 ]; then RISK_COLOR=orange; else RISK_COLOR=red; fi
+          mkdir -p badges
+          echo '{"schemaVersion":1,"label":"risk score","message":"'"$risk"'","color":"'"$RISK_COLOR"'"}' > badges/risk-score-badge.json
+          # Branch-qualified copy (para deltas futuros)
+          cp badges/risk-score-badge.json badges/risk-score-badge-${SAFE_BRANCH}.json || true
+          # Histórico de risk score
+          RISK_HISTORY=badges/history/risk-score-history-${SAFE_BRANCH}.json
+          node - <<'EOF'
+          const fs=require('fs');
+          const file=process.env.RISK_HISTORY;
+          let data=[]; try{ data=JSON.parse(fs.readFileSync(file,'utf8')); }catch{}
+          const risk=parseInt(process.env.RISK_VALUE,10);
+          const breakdownFile=`badges/risk-score-latest-${process.env.SAFE_BRANCH}.json`;
+          // Breakdown components (rough - some variables passed by env)
+          const comp={
+            coverageGate: process.env.COV_GATE==='fail'? -30:0,
+            coverageAvg: (()=>{ const v=parseFloat(process.env.COV_AVG||'0'); if(!Number.isFinite(v)) return 0; if(v<85) return -10; if(v<90) return -5; return 0; })(),
+            diffCoverage: (()=>{ const v=parseFloat(process.env.DIFF_PCT||'0'); if(!Number.isFinite(v)) return 0; if(v<80) return -15; if(v<90) return -5; return 0; })(),
+            codeql: process.env.CODEQL_RESULT==='success'?0:-15,
+            semgrep: process.env.SEMGREP_RESULT==='success'?0:-10,
+            sonar: process.env.SONAR_RESULT==='success'?0:-10,
+            severities: parseInt(process.env.SEV_PENALTY||'0',10)||0,
+            aging: (()=>{ const a=parseFloat(process.env.AGING_DAYS||'0'); if(a>14) return -10; if(a>7) return -6; if(a>3) return -3; return 0; })()
+          };
+          const totalPen=Object.values(comp).reduce((a,b)=>a+b,0);
+          const snapshot={ score:risk, components:comp, totalPenalty: totalPen, generatedAt: new Date().toISOString() };
+          fs.writeFileSync(breakdownFile, JSON.stringify(snapshot,null,2));
+          if(Number.isFinite(risk)){
+            data.push({t:Math.floor(Date.now()/1000),score:risk});
+            data=data.slice(-199);
+            fs.writeFileSync(file, JSON.stringify(data,null,2));
+          }
+          EOF
+          echo "Generated risk-score-badge.json (risk=$risk color=$RISK_COLOR sevPenalty=$sev_penalty aging=$aging_days)"
+          export RISK_VALUE=$risk
           if [ -f diff-coverage/diff-coverage-badge.json ]; then
             DIFF_PCT=$(jq -r '.message' diff-coverage/diff-coverage-badge.json 2>/dev/null | tr -d '%')
             if [ -n "$DIFF_PCT" ]; then

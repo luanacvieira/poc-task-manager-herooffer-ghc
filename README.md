@@ -4,6 +4,7 @@
 ![Build (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/build-status-badge-master.json)
 ![Coverage (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-master.json)
 ![Coverage Gate (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-master.json)
+![Risk Score (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/risk-score-badge-master.json)
 <!-- pipeline trigger no-op: ajuste cosmético -->
 ![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=alert_status)
 ![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=coverage)
