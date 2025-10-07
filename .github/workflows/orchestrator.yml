@@ -53,7 +53,8 @@ jobs:
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
-          npx eslint backend frontend
+          # Fail build on any warning to surface unused vars etc.
+          npx eslint backend frontend --max-warnings=0
 
   typecheck:
     name: Type Check (Frontend)
