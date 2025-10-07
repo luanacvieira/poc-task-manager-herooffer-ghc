@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /*
-  Dashboard Analítico: consolida cobertura (histórico + diff), alertas de segurança (Code Scanning),
-  performance de pipeline e um índice de risco composto simples.
+  Gera consolidação de métricas: cobertura (histórico), vulnerabilidades (Code Scanning), performance (duração média de workflow), índice de risco simplificado.
   Saídas:
     - analytics/metrics.json
-    - docs/analytics-dashboard/index.html
+    - docs/analytics-dashboard/index.html (auto-gerado se existir diretório docs)
 */
 const fs = require('fs');
 const path = require('path');
@@ -13,65 +12,101 @@ const path = require('path');
 const REPO = process.env.REPO || '';
 const [owner, repo] = REPO.split('/');
 const token = process.env.GITHUB_TOKEN;
-if (!token) { console.error('GITHUB_TOKEN ausente; abortando.'); process.exit(0);} 
+if (!token) {
+  console.error('GITHUB_TOKEN ausente; abortando geração analítica.');
+  process.exit(0);
+}
 
 async function ghJson(url) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } });
-  if (!res.ok) { console.warn('Falha fetch', url, res.status); return null; }
+  if (!res.ok) {
+    console.warn('Falha fetch', url, res.status);
+    return null;
+  }
   return res.json();
 }
-function readJsonSafe(p, def = null) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; } }
-function history(baseDir, name, branch) { return readJsonSafe(path.join(baseDir,'badges','history',`${name}-${branch}.json`),[]); }
-function latest(list, key){ return list.length ? parseFloat(list[list.length-1][key]) : null; }
-function durationStats(msList){ if(!msList.length) return {avgSec:0,p95Sec:0,count:0}; const secs=msList.map(x=>x/1000).sort((a,b)=>a-b); const avg=secs.reduce((a,b)=>a+b,0)/secs.length; const p95=secs[Math.min(secs.length-1, Math.floor(secs.length*0.95))]; return {avgSec:+avg.toFixed(2), p95Sec:+p95.toFixed(2), count:secs.length}; }
+
+function readJsonSafe(p, def = null) {
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; }
+}
+
+function pickCoverageHistory(baseDir, branch) {
+  const file = path.join(baseDir, 'badges', 'history', `coverage-history-${branch}.json`);
+  return readJsonSafe(file, []);
+}
+
+function pickDiffCoverageHistory(baseDir, branch) {
+  const file = path.join(baseDir, 'badges', 'history', `diff-coverage-history-${branch}.json`);
+  return readJsonSafe(file, []);
+}
+
+function latestAvg(hist) { return hist.length ? parseFloat(hist[hist.length - 1].avg) : null; }
+function latestDiff(hist) { return hist.length ? parseFloat(hist[hist.length - 1].pct) : null; }
+
+function durationStats(list) {
+  if (!list.length) return { avgSec: 0, p95Sec: 0, count: 0 };
+  const secs = list.map(x => x / 1000).sort((a,b)=>a-b);
+  const avg = secs.reduce((a,b)=>a+b,0)/secs.length;
+  const p95 = secs[Math.min(secs.length - 1, Math.floor(secs.length * 0.95))];
+  return { avgSec: +avg.toFixed(2), p95Sec: +p95.toFixed(2), count: secs.length };
+}
 
 // ----------------- Main -----------------
 (async () => {
-  const badgesDir = fs.existsSync('_badges_worktree') ? '_badges_worktree' : '.';
-  let refBranch = 'master';
-  let coverageHist = history(badgesDir,'coverage-history','master');
-  if(!coverageHist.length){ const alt = history(badgesDir,'coverage-history','develop'); if(alt.length){ coverageHist = alt; refBranch='develop'; } }
-  const diffHist = history(badgesDir,'diff-coverage-history', refBranch);
-
-  // Alertas Code Scanning (abertos)
-  const alerts = await ghJson(`https://api.github.com/repos/${owner}/${repo}/code-scanning/alerts?state=open&per_page=100`) || [];
-  const sev = { critical:0, high:0, medium:0, low:0, note:0, unknown:0 };
-  for(const a of alerts){ const s=(a.rule?.security_severity||a.rule?.severity||'unknown').toLowerCase(); if(sev[s]!==undefined) sev[s]++; else sev.unknown++; }
-
-  // Performance - últimos 20 runs do workflow Orchestrator Pipeline
-  const workflows = await ghJson(`https://api.github.com/repos/${owner}/${repo}/actions/workflows`);
-  const orchestratorId = workflows?.workflows?.find(w=>w.name==='Orchestrator Pipeline')?.id;
-  let perf = {avgSec:0,p95Sec:0,count:0};
-  if(orchestratorId){
-    const runs = await ghJson(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${orchestratorId}/runs?per_page=20`);
-    const durations = (runs?.workflow_runs||[])
-      .filter(r=>r.status==='completed' && r.run_started_at && r.updated_at)
-      .map(r=> new Date(r.updated_at) - new Date(r.run_started_at));
-    perf = durationStats(durations);
+  const badgesWorktree = fs.existsSync('_badges_worktree') ? '_badges_worktree' : '.'; // fallback
+  const candidateBranches = ['master', 'develop'];
+  let chosen = null; let coverageHist = []; let diffHist = [];
+  for (const b of candidateBranches) {
+    coverageHist = pickCoverageHistory(badgesWorktree, b);
+    if (coverageHist.length) { chosen = b; diffHist = pickDiffCoverageHistory(badgesWorktree, b); break; }
   }
+  if (!chosen) { chosen = 'master'; }
 
-  const covAvg = latest(coverageHist,'avg') || 0;
-  const diffLatest = latest(diffHist,'pct');
-  const trend = coverageHist.length > 1 ? covAvg - parseFloat(coverageHist[Math.max(0,coverageHist.length-2)].avg) : 0;
-  const risk = ((sev.critical + sev.high) * 2) + ((100 - covAvg)/10);
+  // Code Scanning alerts (open)
+  const alerts = await ghJson(`https://api.github.com/repos/${owner}/${repo}/code-scanning/alerts?state=open&per_page=100`)
+                 || [];
+  const severityCount = { critical:0, high:0, medium:0, low:0, note:0, unknown:0 };
+  alerts.forEach(a => { const s=(a.rule?.security_severity||a.rule?.severity||'unknown').toLowerCase(); if(severityCount[s]!==undefined) severityCount[s]++; else severityCount.unknown++; });
+  const totalAlerts = alerts.length;
+
+  // Workflow performance (últimos 20 runs do orchestrator)
+  // Descobrindo workflow id por nome
+  const workflows = await ghJson(`https://api.github.com/repos/${owner}/${repo}/actions/workflows`);
+  let orchestratorId = workflows?.workflows?.find(w => w.name === 'Orchestrator Pipeline')?.id;
+  let runDurations = [];
+  if (orchestratorId) {
+    const runs = await ghJson(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${orchestratorId}/runs?per_page=20`);
+    if (runs?.workflow_runs) {
+      runDurations = runs.workflow_runs.filter(r=>r.status==='completed' && r.run_started_at && r.updated_at).map(r=> (new Date(r.updated_at) - new Date(r.run_started_at)) );
+    }
+  }
+  const perf = durationStats(runDurations);
+
+  // Risco simplificado: (alertas críticos+altos) * 2 + (100 - coberturaAtual)/10
+  const covCurrent = latestAvg(coverageHist) ?? 0;
+  const diffCurrent = latestDiff(diffHist) ?? null;
+  const riskScore = ((severityCount.critical + severityCount.high) * 2) + ((100 - covCurrent) / 10);
 
   const metrics = {
     repository: REPO,
-    referenceBranch: refBranch,
+    referenceBranch: chosen,
     timestamps: { generated: new Date().toISOString() },
     coverage: {
       historyPoints: coverageHist.length,
-      latestAverage: covAvg,
-      trendDirection: trend,
-      differentialLatest: diffLatest != null ? parseFloat(diffLatest) : null
+      latestAverage: covCurrent,
+      trendDirection: coverageHist.length > 1 ? (covCurrent - parseFloat(coverageHist[Math.max(0, coverageHist.length-2)].avg)) : 0,
+      differentialLatest: diffCurrent
     },
-    security: { totalOpenAlerts: alerts.length, severityCount: sev },
+    security: {
+      totalOpenAlerts: totalAlerts,
+      severityCount
+    },
     workflowPerformance: perf,
-    compositeRiskIndex: +risk.toFixed(2)
+    compositeRiskIndex: +riskScore.toFixed(2)
   };
 
   fs.mkdirSync('analytics', { recursive: true });
-  fs.writeFileSync('analytics/metrics.json', JSON.stringify(metrics,null,2));
+  fs.writeFileSync('analytics/metrics.json', JSON.stringify(metrics, null, 2));
 
   // HTML Dashboard
   const dashDir = path.join(process.env.DASHBOARD_DIR || 'docs/analytics-dashboard');
@@ -79,7 +114,7 @@ function durationStats(msList){ if(!msList.length) return {avgSec:0,p95Sec:0,cou
   const html = `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/><title>Dashboard Analítico – ${repo}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>body{font-family:system-ui,Arial,sans-serif;margin:20px;color:#222;}h1{margin-top:0}section{margin-bottom:32px}code{background:#f5f5f5;padding:2px 4px;border-radius:4px;font-size:0.9em} .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:16px 0;} .kpi{border:1px solid #ddd;padding:12px;border-radius:8px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05);} .kpi h3{margin:0 0 4px;font-size:14px;text-transform:uppercase;color:#555;} .kpi .val{font-size:24px;font-weight:600;} .trendUp{color:#0a0;} .trendDown{color:#c00;} canvas{max-width:100%;} footer{margin-top:40px;font-size:12px;color:#666;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:6px;text-align:left;} th{background:#fafafa;} .sev-critical{color:#b30000;font-weight:600;} .sev-high{color:#d32;} .sev-medium{color:#c60;} .sev-low{color:#06c;} .sev-note{color:#555;} .badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:12px;background:#eee;margin-right:4px;} </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-VnoxJqGQvYVz45hD9KsGJ6JrXmefNJmkavRKu0kUQws=" crossorigin="anonymous"></script>
 </head><body>
 <h1>Dashboard Analítico – ${repo}</h1>
 <p>Branch de referência de cobertura: <strong>${metrics.referenceBranch}</strong></p>
