@@ -54,6 +54,7 @@ jobs:
             git push origin HEAD:${GITHUB_REF_NAME}
           else
             echo "Nenhuma alteração para dashboard."
+          fi
       # Passo opcional (desabilitado): Publicar em gh-pages
       # - name: Publicar em gh-pages
       #   if: ${{ false }}
