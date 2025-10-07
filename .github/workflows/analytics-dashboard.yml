@@ -1,0 +1,61 @@
+name: Analytics Dashboard
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # Diariamente 03:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [ master, develop ]
+
+permissions:
+  contents: write
+  security-events: read
+  actions: read
+
+env:
+  TARGET_BRANCH: badges
+  DASHBOARD_DIR: docs/analytics-dashboard
+
+jobs:
+  generate-dashboard:
+    name: Consolidar Métricas & Gerar Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código (branch atual)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch branch de métricas (badges)
+        run: |
+          git fetch origin $TARGET_BRANCH || echo "Sem branch de badges ainda"
+          if git show-ref --verify --quiet refs/remotes/origin/$TARGET_BRANCH; then
+            git worktree add _badges_worktree origin/$TARGET_BRANCH
+          else
+            mkdir -p _badges_worktree/badges/history
+          fi
+      - name: Instalar dependências mínimas (se necessário)
+        run: |
+          echo "Usando Node para chamadas API nativas (fetch)."
+      - name: Gerar arquivos analíticos
+        id: gen
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node ./scripts/generate-analytics-dashboard.js
+      - name: Publicar dashboard no repositório
+        run: |
+          set -e
+          if git status --porcelain | grep -q .; then
+            git config user.name 'github-actions'
+            git config user.email 'actions@github.com'
+            git add $DASHBOARD_DIR analytics/metrics.json || true
+            git commit -m 'chore(analytics): atualizar dashboard analítico'
+            git push origin HEAD:${GITHUB_REF_NAME}
+          else
+            echo "Nenhuma alteração para dashboard."
+      # Passo opcional (desabilitado): Publicar em gh-pages
+      # - name: Publicar em gh-pages
+      #   if: ${{ false }}
+      #   run: |
+      #     echo "(Placeholder para publicação em gh-pages)"
