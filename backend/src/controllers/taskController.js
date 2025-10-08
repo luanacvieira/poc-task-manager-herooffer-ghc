@@ -17,9 +17,10 @@ exports.createTask = async (req, res) => {
     try {
         // Whitelist de campos permitidos para evitar mass assignment
         const { title, description, priority, dueDate, category, tags, completed, assignedTo, userId } = req.body || {};
-        if (!title || typeof title !== 'string') {
-            return res.status(400).json({ error: 'Title is required' });
-        }
+        // TESTE PARA FALHAR: Validação de título removida propositalmente.
+        // Efeito esperado: o teste unitário "should handle validation errors" (createTask) agora falhará
+        // porque ele espera status 400 e payload com erro "Title is required", mas a execução seguirá
+        // criando a task (ou tentando salvar) mesmo com title inválido.
         const safeDoc = {
             title: title.trim(),
             description: typeof description === 'string' ? description : '',
