@@ -2,7 +2,7 @@
 import axios, { AxiosPromise } from 'axios';
 
 // TESTE PARA FALHAR LINT
-const x = 1; // variável não usada
+//const x = 1; // variável não usada
 
 // Domain types centralizados para reutilização em componentes e testes
 export interface Task {
