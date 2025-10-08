@@ -1116,3 +1116,88 @@ jobs:
             } else {
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${extended}` });
             }
+  update-readme-badges:
+    name: Update README badges section (Orchestrator parity)
+    runs-on: ubuntu-latest
+    needs: [finalize]
+    if: always() && github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Update README badge block
+        env:
+          HEAD_BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '-')
+          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/badges/badges"
+          BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
+          COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
+          COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
+          COVERAGE_DELTA_BRANCH_URL="${BADGES_DIR}/coverage-delta-badge-${SAFE_BRANCH}.json"
+          COVERAGE_TREND_BRANCH_URL="${BADGES_DIR}/coverage-trend-badge-${SAFE_BRANCH}.json"
+          DIFF_COVERAGE_BRANCH_URL="${BADGES_DIR}/diff-coverage-badge-${SAFE_BRANCH}.json"
+          DIFF_COVERAGE_BASE_URL="${BADGES_DIR}/diff-coverage-badge-master.json"
+          RISK_SCORE_BRANCH_URL="${BADGES_DIR}/risk-score-badge-${SAFE_BRANCH}.json"
+          RISK_SCORE_BASE_URL="${BADGES_DIR}/risk-score-badge-master.json"
+          BASE_COVERAGE_URL="${BADGES_DIR}/coverage-badge-master.json"
+          BASE_GATE_URL="${BADGES_DIR}/coverage-gate-badge-master.json"
+          echo "<!-- BADGES-AUTO-START -->" > /tmp/_badge_block.md
+          echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_BRANCH_URL})" >> /tmp/_badge_block.md
+          if [ "$HEAD_BRANCH" != "master" ]; then
+            echo "![Coverage (baseline master)](https://img.shields.io/endpoint?url=${BASE_COVERAGE_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (baseline master)](https://img.shields.io/endpoint?url=${BASE_GATE_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage (this branch)](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (this branch)](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+            if curl -sf -I "${DIFF_COVERAGE_BASE_URL}" >/dev/null; then echo "![Diff Coverage (baseline master)](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BASE_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${DIFF_COVERAGE_BRANCH_URL}" >/dev/null; then echo "![Diff Coverage (this branch)](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${COVERAGE_DELTA_BRANCH_URL}" >/dev/null; then echo "![Coverage Delta](https://img.shields.io/endpoint?url=${COVERAGE_DELTA_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${COVERAGE_TREND_BRANCH_URL}" >/dev/null; then echo "![Coverage Trend](https://img.shields.io/endpoint?url=${COVERAGE_TREND_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BASE_URL}" >/dev/null; then echo "![Risk Score (baseline)](https://img.shields.io/endpoint?url=${RISK_SCORE_BASE_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score (this branch)](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+          else
+            echo "![Coverage (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+            if curl -sf -I "${DIFF_COVERAGE_BRANCH_URL}" >/dev/null; then echo "![Diff Coverage](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+          fi
+          echo "![Orchestrator](https://github.com/${REPO}/actions/workflows/orchestrator.yml/badge.svg)" >> /tmp/_badge_block.md
+          SONAR_PROJECT_KEY="github_poc-task-manager-herooffer-ghc"
+          echo "![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=alert_status)" >> /tmp/_badge_block.md
+          echo "![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=coverage)" >> /tmp/_badge_block.md
+          echo "![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=bugs)" >> /tmp/_badge_block.md
+          echo "![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=vulnerabilities)" >> /tmp/_badge_block.md
+          echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
+          echo "![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=sqale_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=reliability_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=security_rating)" >> /tmp/_badge_block.md
+          echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
+          if grep -q 'BADGES-AUTO-START' README.md; then
+            sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          else
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          fi
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add README.md || true
+          if git diff --cached --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "docs(badges): update README badges block for ${HEAD_BRANCH}" || true
+          fi
+      - name: Push README update
+        if: success()
+        run: |
+          git push origin HEAD:${GITHUB_REF_NAME:-${GITHUB_REF_NAME}} || echo "Push skipped"
