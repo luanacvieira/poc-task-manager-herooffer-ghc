@@ -15,15 +15,12 @@ const mockedAxios = axios as unknown as {
 // Mock do TaskForm component
 jest.mock('../components/TaskForm', () => {
     return function MockTaskForm({ onTaskAdded: _onTaskAdded }: { onTaskAdded: () => void }) {
-        // TESTE PARA FALHAR: Botão de "Add Task" permanece REMOVIDO de propósito.
-        // O teste procura por 'Add Task' e tenta clicar. Como não existe, o teste falha.
-        // Mantemos o parâmetro como _onTaskAdded para não acionar regra de no-unused-vars (argsIgnorePattern '^_').
-        // Importante: Não referenciar 'onTaskAdded' (sem underscore) para evitar erro no-undef do ESLint.
+        // Ajuste: Reintroduzimos o botão para que o teste "should refresh tasks when TaskForm triggers onTaskAdded" passe.
+        // Usamos _onTaskAdded (underscore) para não violar no-unused-vars.
         return (
             <div data-testid="task-form">
-                {/* Botão removido intencionalmente para provocar falha no teste de refresh */}
-                {/* <button onClick={_onTaskAdded}>Add Task</button> */}
-                <span style={{fontSize:'0.8rem',opacity:0.6}}>Mock TaskForm sem botão (regressão proposital)</span>
+                <button onClick={() => _onTaskAdded()}>Add Task</button>
+                <span style={{fontSize:'0.7rem',opacity:0.5,display:'block'}}>Mock TaskForm (botão restaurado para o teste)</span>
             </div>
         );
     };
