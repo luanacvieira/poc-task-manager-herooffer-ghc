@@ -10,9 +10,6 @@ on:
 permissions:
   contents: write
   packages: write
-  security-events: write
-  pull-requests: write
-  issues: write
 
 env:
   NODE_VERSION: '20.x'
@@ -47,19 +44,12 @@ jobs:
           if [ ! -d node_modules ]; then
             npm install --legacy-peer-deps
           fi
-          # Ensure workspace deps too (will respect lockfile entries)
-            npm install --workspaces --legacy-peer-deps
+          npm install --workspaces --legacy-peer-deps
           echo "Installed packages:"; ls -1 node_modules | head -n 30 || true
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
-          echo "::add-matcher::.github/matchers/eslint-unix.json"
-          echo "[Lint Debug] Listando arquivos alvo (backend JS, frontend TS/JS)";
-          ls -1 backend/src 2>/dev/null || true
-          ls -1 frontend/src 2>/dev/null || true
-          echo "[Lint Debug] Versões:"; node -v; npx eslint -v
-          # Formato unix garante parsing pelo matcher
-          npx eslint backend frontend --format unix --max-warnings=0
+          npx eslint backend frontend
 
   typecheck:
     name: Type Check (Frontend)
