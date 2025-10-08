@@ -6,12 +6,14 @@ interface TaskFormProps {
     onTaskAdded: () => void;
 }
 
+/*
 // TESTE PARA FALHAR TYPECHECK
-//function TaskForm(props: TaskFormProps) {
+// function TaskForm(props: TaskFormProps) {
     // Erro proposital: chamando onTaskAdded com argumento inesperado
-//    props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
-//    return <div>Task Form</div>;
-//}
+    // props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
+    // return <div>Task Form</div>;
+// }
+*/
 
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({

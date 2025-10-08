@@ -18,13 +18,25 @@ exports.createTask = async (req, res) => {
     // em caso de erro de validação/salvamento. Em vez disso, vamos sempre devolver 201.
     // Objetivo: quebrar os testes que esperam status 400 e payload de erro ("Title is required").
     // IMPORTANTE: Não manter este comportamento em produção.
+    // 
+    // Commented out to restore proper functionality:
+    /*
+    // TESTE PARA FALHAR (forçado): Removemos a lógica de validação e também NÃO retornaremos mais 400
+    // em caso de erro de validação/salvamento. Em vez disso, vamos sempre devolver 201.
+    // Objetivo: quebrar os testes que esperam status 400 e payload de erro ("Title is required").
+    // IMPORTANTE: Não manter este comportamento em produção.
+    */
 
     // Whitelist de campos permitidos para evitar mass assignment
     const { title, description, priority, dueDate, category, tags, completed, assignedTo, userId } = req.body || {};
 
+    // Validate required fields
+    if (!title || typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ error: 'Title is required' });
+    }
+
     const safeDoc = {
-        // Se title vier vazio/undefined, ainda assim mantemos string vazia para evidenciar a falha
-        title: typeof title === 'string' ? title.trim() : '',
+        title: title.trim(),
         description: typeof description === 'string' ? description : '',
         priority: ['low','medium','high','urgent'].includes(priority) ? priority : 'medium',
         dueDate: dueDate || null,
@@ -35,21 +47,16 @@ exports.createTask = async (req, res) => {
         userId: typeof userId === 'string' ? userId : 'user1'
     };
 
-    console.log('➕ (FORCING TEST FAILURE) Criando nova tarefa sem validar título:', safeDoc);
+    console.log('➕ Criando nova tarefa:', safeDoc);
 
-    let savedTask;
     try {
         const newTask = new Task(safeDoc);
-        savedTask = await newTask.save();
-    } catch (err) {
-        // Em vez de retornar 400, ignoramos o erro e simulamos retorno bem sucedido
-        console.warn('⚠️ Ignorando erro ao salvar tarefa para demonstrar falha de teste:', err.message);
-        // Fallback mínimo (se o mock lançar erro, retornamos o safeDoc mesmo assim)
-        savedTask = { ...safeDoc, _id: savedTask?._id || 'mock-bypass-id' };
+        const savedTask = await newTask.save();
+        return res.status(201).json(savedTask);
+    } catch (error) {
+        console.error('❌ Erro ao salvar tarefa:', error.message);
+        return res.status(400).json({ error: 'Failed to create task', details: error.message });
     }
-
-    // Sempre 201 agora
-    return res.status(201).json(savedTask);
 };
 
 exports.updateTask = async (req, res) => {
