@@ -826,6 +826,11 @@ jobs:
               }
           const summary={ critical: parseInt(process.env.CRIT,10)||0, high: parseInt(process.env.HIGH,10)||0, medium: parseInt(process.env.MED,10)||0, low: parseInt(process.env.LOW,10)||0, agingDays: parseFloat(agingDays.toFixed(2)) };
           fs.writeFileSync('badges/security-signals.json', JSON.stringify(summary,null,2));
+          // Badge summarizing critical/high/medium counts
+          const total=summary.critical+summary.high+summary.medium;
+          let color='brightgreen';
+          if(summary.critical>0) color='red'; else if(summary.high>0) color='orange'; else if(summary.medium>0) color='yellow';
+          fs.writeFileSync('badges/security-signals-badge.json', JSON.stringify({schemaVersion:1,label:'security alerts',message:`${total} (C${summary.critical}/H${summary.high}/M${summary.medium})`,color},null,2));
           // Write env file append for next step
           fs.appendFileSync(process.env.GITHUB_ENV, `CRIT_COUNT=${summary.critical}\nHIGH_COUNT=${summary.high}\nMED_COUNT=${summary.medium}\nAGING_DAYS=${summary.agingDays}\n`);
           EOF
@@ -1001,6 +1006,8 @@ jobs:
           echo '{"schemaVersion":1,"label":"risk score","message":"'"$risk"'","color":"'"$RISK_COLOR"'"}' > badges/risk-score-badge.json
           # Branch-qualified copy (para deltas futuros)
           cp badges/risk-score-badge.json badges/risk-score-badge-${SAFE_BRANCH}.json || true
+          # Copy security signals badge if present
+          if [ -f badges/security-signals-badge.json ]; then cp badges/security-signals-badge.json badges/security-signals-badge-${SAFE_BRANCH}.json || true; fi
           # Histórico de risk score
           RISK_HISTORY=badges/history/risk-score-history-${SAFE_BRANCH}.json
           node - <<'EOF'
@@ -1164,6 +1171,8 @@ jobs:
           DIFF_COVERAGE_BASE_URL="${BADGES_DIR}/diff-coverage-badge-master.json"
           RISK_SCORE_BRANCH_URL="${BADGES_DIR}/risk-score-badge-${SAFE_BRANCH}.json"
           RISK_SCORE_BASE_URL="${BADGES_DIR}/risk-score-badge-master.json"
+          SECURITY_SIGNALS_BRANCH_URL="${BADGES_DIR}/security-signals-badge-${SAFE_BRANCH}.json"
+          SECURITY_SIGNALS_BASE_URL="${BADGES_DIR}/security-signals-badge-master.json"
           BASE_COVERAGE_URL="${BADGES_DIR}/coverage-badge-master.json"
           BASE_GATE_URL="${BADGES_DIR}/coverage-gate-badge-master.json"
           echo "<!-- BADGES-AUTO-START -->" > /tmp/_badge_block.md
@@ -1179,11 +1188,14 @@ jobs:
             if curl -sf -I "${COVERAGE_TREND_BRANCH_URL}" >/dev/null; then echo "![Coverage Trend](https://img.shields.io/endpoint?url=${COVERAGE_TREND_BRANCH_URL})" >> /tmp/_badge_block.md; fi
             if curl -sf -I "${RISK_SCORE_BASE_URL}" >/dev/null; then echo "![Risk Score (baseline)](https://img.shields.io/endpoint?url=${RISK_SCORE_BASE_URL})" >> /tmp/_badge_block.md; fi
             if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score (this branch)](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${SECURITY_SIGNALS_BASE_URL}" >/dev/null; then echo "![Security Alerts (baseline)](https://img.shields.io/endpoint?url=${SECURITY_SIGNALS_BASE_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${SECURITY_SIGNALS_BRANCH_URL}" >/dev/null; then echo "![Security Alerts (this branch)](https://img.shields.io/endpoint?url=${SECURITY_SIGNALS_BRANCH_URL})" >> /tmp/_badge_block.md; fi
           else
             echo "![Coverage (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
             echo "![Coverage Gate (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
             if curl -sf -I "${DIFF_COVERAGE_BRANCH_URL}" >/dev/null; then echo "![Diff Coverage](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
             if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${SECURITY_SIGNALS_BRANCH_URL}" >/dev/null; then echo "![Security Alerts](https://img.shields.io/endpoint?url=${SECURITY_SIGNALS_BRANCH_URL})" >> /tmp/_badge_block.md; fi
           fi
           echo "![Orchestrator](https://github.com/${REPO}/actions/workflows/orchestrator.yml/badge.svg)" >> /tmp/_badge_block.md
           SONAR_PROJECT_KEY="github_poc-task-manager-herooffer-ghc"
