@@ -293,19 +293,25 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
             git fetch origin "$BASE_REF:$BASE_REF" || true
-            git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+            # Garante criação do arquivo explicitamente antes de redirecionar (evita edge cases de pipe falha)
+            : > changed.txt
+            git diff --name-only origin/$BASE_REF...HEAD | grep -E '^(backend|frontend)/src/' || true >> changed.txt
           else
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
-              git diff --name-only HEAD~1..HEAD | grep -E '^(backend|frontend)/src/' || true > changed.txt
+              : > changed.txt
+              git diff --name-only HEAD~1..HEAD | grep -E '^(backend|frontend)/src/' || true >> changed.txt
             else
               echo "(No previous commit to diff against)";
               touch changed.txt
             fi
           fi
           echo "Changed files:"; cat changed.txt || true
-          printf 'list<<EOF\n' >> $GITHUB_OUTPUT
-          cat changed.txt >> $GITHUB_OUTPUT
-          printf '\nEOF\n' >> $GITHUB_OUTPUT
+          # Exporta conteúdo como saída multiline segura
+          {
+            echo 'list<<CHANGED_EOF'
+            cat changed.txt
+            echo 'CHANGED_EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Download Coverage Artifacts
         uses: actions/download-artifact@v4
         with:
