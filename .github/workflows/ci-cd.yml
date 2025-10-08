@@ -4,8 +4,10 @@ on:
   workflow_run:
     workflows: ["Test and Coverage Check"]
     types: [completed]
-  # Execução manual direta do Build (debug / inspeção independente)
+  # Permitir build direto (debug) ou em PR (master/develop) para inspecionar artefatos
   workflow_dispatch:
+  pull_request:
+    branches: [ master, develop ]
 
 permissions:
   contents: write

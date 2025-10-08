@@ -2,7 +2,7 @@ name: Orchestrator Pipeline
 
 on:
   push:
-    branches: [ master, develop, feature/*, release/* ]
+    branches: [ master, develop, feature/*, feature/**, release/* ]
   pull_request:
     branches: [ master, develop ]
   workflow_dispatch:
@@ -53,7 +53,13 @@ jobs:
           echo "Node $(node -v) - npm $(npm -v)"
       - name: Lint (flat config)
         run: |
-          npx eslint backend frontend
+          echo "::add-matcher::.github/matchers/eslint-unix.json"
+          echo "[Lint Debug] Listando arquivos alvo (backend JS, frontend TS/JS)";
+          ls -1 backend/src 2>/dev/null || true
+          ls -1 frontend/src 2>/dev/null || true
+          echo "[Lint Debug] Versões:"; node -v; npx eslint -v
+          # Formato unix garante parsing pelo matcher
+          npx eslint backend frontend --format unix --max-warnings=0
 
   typecheck:
     name: Type Check (Frontend)
@@ -190,7 +196,6 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `avg=${avg}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `gate=${gatePass? 'pass':'fail'}\n`);
           if(fails.length){ console.error('Coverage gate fail:', fails.join(',')); process.exit(1); }
-          EOF
       - name: Upload Combined Coverage Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -410,6 +415,11 @@ jobs:
     name: SonarCloud
     runs-on: ubuntu-latest
     needs: [build-frontend]
+    outputs:
+      sonar_blocker: ${{ steps.sonar_issues.outputs.blocker || '0' }}
+      sonar_critical: ${{ steps.sonar_issues.outputs.critical || '0' }}
+      sonar_major: ${{ steps.sonar_issues.outputs.major || '0' }}
+      sonar_minor: ${{ steps.sonar_issues.outputs.minor || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -451,6 +461,22 @@ jobs:
           echo "Quality Gate Status: $STATUS"
           if [ "$STATUS" != "OK" ] && [ "$STATUS" != "SUCCESS" ]; then
             echo "::error::Quality Gate failed ($STATUS)"; exit 1; fi
+      - name: Collect Sonar Issue Severities
+        id: sonar_issues
+        if: steps.sonar_guard.outputs.SKIP == 'false'
+        run: |
+          # Fetch open issues (paginated) limited to first 500 for demo
+          DATA=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/issues/search?componentKeys=${{ env.SONAR_PROJECT_KEY }}&statuses=OPEN&ps=500") || DATA='{}'
+          echo "$DATA" | jq '.' >/dev/null 2>&1 || DATA='{}'
+          BLOCKER=$(echo "$DATA" | jq '[.issues[]? | select(.severity=="BLOCKER")] | length')
+          CRITICAL=$(echo "$DATA" | jq '[.issues[]? | select(.severity=="CRITICAL")] | length')
+          MAJOR=$(echo "$DATA" | jq '[.issues[]? | select(.severity=="MAJOR")] | length')
+          MINOR=$(echo "$DATA" | jq '[.issues[]? | select(.severity=="MINOR")] | length')
+          echo "blocker=$BLOCKER" >> $GITHUB_OUTPUT
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "Sonar severities -> BLOCKER:$BLOCKER CRITICAL:$CRITICAL MAJOR:$MAJOR MINOR:$MINOR"
       - name: Sonar Summary
         run: |
           if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then
@@ -460,6 +486,63 @@ jobs:
             echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
             echo "Analysis executed." >> $GITHUB_STEP_SUMMARY
           fi
+  secrets-licenses:
+    name: Secrets & Licenses Scan
+    runs-on: ubuntu-latest
+    needs: [build-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gitleaks (secrets)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          echo "Installing gitleaks CLI"
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
+          echo "Running gitleaks detect (will not fail pipeline on findings)"
+          # --exit-code 0 ensures the job continues even if leaks are found; adjust if you want hard fail
+          gitleaks detect --report-format sarif --report-path gitleaks.sarif --exit-code 0
+          # Quick count of findings for later risk scoring (saved as secret-signals.json)
+          node -e "const fs=require('fs');let c=0;try{const sar=JSON.parse(fs.readFileSync('gitleaks.sarif','utf8'));for(const run of sar.runs||[]) c+=(run.results||[]).length;}catch{}fs.writeFileSync('secret-signals.json',JSON.stringify({count:c},null,2));console.log('Detected secrets:',c);"
+      - name: Upload Gitleaks SARIF to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+      - name: Upload Gitleaks SARIF Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-sarif
+          path: gitleaks.sarif
+      - name: Upload Secret Signals Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-signals
+          path: secret-signals.json
+      - name: License Scan (license-checker)
+        run: |
+          npm install -g license-checker@25.0.1
+          license-checker --production --json > licenses.json || echo '{}' > licenses.json
+          node <<'EOF'
+          const fs=require('fs');
+          const allowed=new Set(['MIT','ISC','Apache-2.0','BSD-2-Clause','BSD-3-Clause']);
+          let data={};
+          try{ data=JSON.parse(fs.readFileSync('licenses.json','utf8')); }catch{}
+          let total=0, issues=0, details=[];
+          for(const [pkg,info] of Object.entries(data)){
+            total++;
+            const lic = (info.licenses||'').split(/\sOR\s|\s\|\s|,/)[0];
+            if(!allowed.has(lic)) { issues++; details.push({pkg,license:lic}); }
+          }
+          fs.writeFileSync('license-signals.json', JSON.stringify({ total, issues, details:details.slice(0,50) }, null,2));
+          EOF
+      - name: Upload License Signals
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-signals
+          path: license-signals.json
   semgrep:
     name: Semgrep SAST
     runs-on: ubuntu-latest
@@ -483,6 +566,12 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
+      - name: Upload Semgrep SARIF Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
 
   package-backend:
     name: Build & Publish Backend Image (GHCR)
@@ -535,7 +624,7 @@ jobs:
   finalize:
     name: Finalize Summary
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar, diff-coverage, sbom, semgrep]
+    needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar, diff-coverage, sbom, semgrep, secrets-licenses]
     if: always()
     steps:
       - name: Summary
@@ -567,12 +656,367 @@ jobs:
         with:
           name: diff-coverage
           path: diff-coverage
+      - name: Download Semgrep SARIF Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep-artifact
+      - name: Download Gitleaks SARIF Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: gitleaks-sarif
+          path: gitleaks-artifact
+      - name: Download Secret Signals Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: secret-signals
+          path: secret-artifact
+      - name: Download SBOM Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: sbom-artifact
+      - name: Download License Signals Artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: license-signals
+          path: license-artifact
+      - name: Collect Security Signals (severity & aging)
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO="${GITHUB_REPOSITORY}"
+          echo "Collecting Code Scanning alerts (CodeQL + Semgrep uploaded)";
+          # Code Scanning Alerts (open)
+          CODE_SCANNING_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/code-scanning/alerts?state=open&per_page=100") || CODE_SCANNING_JSON='[]'
+          echo "$CODE_SCANNING_JSON" | jq '.' >/dev/null 2>&1 || CODE_SCANNING_JSON='[]'
+          CRIT=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="critical")] | length')
+          HIGH=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="high")] | length')
+          MED=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="medium")] | length')
+          LOW=$(echo "$CODE_SCANNING_JSON" | jq '[.[] | select(.security_severity_level=="low")] | length')
+          # Semgrep SARIF results severity fallback (if not surfaced in code scanning metadata)
+          if [ -f semgrep-artifact/semgrep.sarif ]; then
+            SEMGREP_CRIT=$(jq '[.runs[].results[] | select(.rule.severity=="ERROR")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            SEMGREP_HIGH=$(jq '[.runs[].results[] | select(.rule.severity=="WARNING")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            SEMGREP_MED=$(jq '[.runs[].results[] | select(.rule.severity=="INFO")]|length' semgrep-artifact/semgrep.sarif 2>/dev/null || echo 0)
+            # Merge (sum) if GitHub code scanning did not map them
+            CRIT=$((CRIT+SEMGREP_CRIT))
+            HIGH=$((HIGH+SEMGREP_HIGH))
+            MED=$((MED+SEMGREP_MED))
+          fi
+          mkdir -p badges/history
+          CATALOG=badges/history/alerts-catalog.json
+          NOW_TS=$(date +%s)
+          node <<'EOF'
+          const fs=require('fs');
+          const now=parseInt(process.env.NOW_TS,10);
+          const catalogFile=process.env.CATALOG;
+          let catalog={};
+            try{ catalog=JSON.parse(fs.readFileSync(catalogFile,'utf8')); }catch{}
+          // Build set of current alert IDs from code scanning
+          let currentIds=new Set();
+          try {
+            const alerts = JSON.parse(process.env.CODE_SCANNING_JSON || '[]');
+            for(const a of alerts){
+              const id = `cs:${a.number||a.rule?.id||'unknown'}`;
+              node <<'EOF'
+              if(!catalog[id]) catalog[id]={ firstSeen: now };
+            }
+          } catch(e){ /* ignore */ }
+          // Semgrep SARIF granular IDs
+          try {
+              // Build set of current alert IDs from code scanning
+              let currentIds=new Set();
+              const currentMeta={};
+              for(const run of sarif.runs||[]){
+                for(const r of run.results||[]){
+                  const loc=(r.locations&&r.locations[0]&&r.locations[0].physicalLocation)||{};
+                  const file=loc.artifactLocation?.uri||'unknown';
+                  const line=loc.region?.startLine||0;
+                  if(!catalog[id]) catalog[id]={ firstSeen: now, reopenCount:0 };
+                  catalog[id].lastSeen=now;
+                  if(catalog[id].closedAt){
+                    // Reopened
+                    catalog[id].reopenCount = (catalog[id].reopenCount||0)+1;
+                    delete catalog[id].closedAt;
+                  }
+                  catalog[id].status='open';
+                  currentMeta[id]={ source:'code-scanning'};
+                  const id=`sg:${ruleId}:${file}:${line}`;
+                  currentIds.add(id);
+                  if(!catalog[id]) catalog[id]={ firstSeen: now };
+                }
+              }
+            }
+          } catch(e){ /* ignore */ }
+          // Aging calc (only open alerts we still see)
+          let ages=[];
+          for(const id of currentIds){
+            const meta=catalog[id];
+            if(meta && meta.firstSeen){
+              const ageDays=(now - meta.firstSeen)/86400;
+              ages.push(ageDays);
+                      if(!catalog[id]) catalog[id]={ firstSeen: now, reopenCount:0 };
+                      catalog[id].lastSeen=now;
+                      if(catalog[id].closedAt){
+                        catalog[id].reopenCount = (catalog[id].reopenCount||0)+1;
+                        delete catalog[id].closedAt;
+                      }
+                      catalog[id].status='open';
+                      currentMeta[id]={ source:'semgrep'};
+          }
+          const agingDays = ages.length? (ages.reduce((a,b)=>a+b,0)/ages.length) : 0;
+          fs.writeFileSync(catalogFile, JSON.stringify(catalog,null,2));
+          // Export summary JSON
+              // Gitleaks (secrets) SARIF IDs
+              try {
+                if(fs.existsSync('gitleaks-artifact/gitleaks.sarif')){
+                  const sarif=JSON.parse(fs.readFileSync('gitleaks-artifact/gitleaks.sarif','utf8'));
+                  for(const run of sarif.runs||[]){
+                    for(const r of run.results||[]){
+                      const msg=(r.message&&r.message.text)||'secret';
+                      const rule=r.ruleId||'secret';
+                      const id=`gl:${rule}:${msg.substring(0,40)}`;
+                      currentIds.add(id);
+                      if(!catalog[id]) catalog[id]={ firstSeen: now, reopenCount:0 };
+                      catalog[id].lastSeen=now;
+                      if(catalog[id].closedAt){
+                        catalog[id].reopenCount=(catalog[id].reopenCount||0)+1; delete catalog[id].closedAt;
+                      }
+                      catalog[id].status='open';
+                      node <<'EOF'
+                    }
+                  }
+                }
+              } catch(e){ /* ignore */ }
+              // Mark disappeared alerts as closed (churn)
+              for(const id of Object.keys(catalog)){
+                      let currentIds=new Set();
+                      const currentMeta={};
+                  catalog[id].closedAt=now;
+                }
+              }
+          const summary={ critical: parseInt(process.env.CRIT,10)||0, high: parseInt(process.env.HIGH,10)||0, medium: parseInt(process.env.MED,10)||0, low: parseInt(process.env.LOW,10)||0, agingDays: parseFloat(agingDays.toFixed(2)) };
+          fs.writeFileSync('badges/security-signals.json', JSON.stringify(summary,null,2));
+          // Write env file append for next step
+          fs.appendFileSync(process.env.GITHUB_ENV, `CRIT_COUNT=${summary.critical}\nHIGH_COUNT=${summary.high}\nMED_COUNT=${summary.medium}\nAGING_DAYS=${summary.agingDays}\n`);
+          EOF
+          echo "Security signals collected: CRIT=$CRIT HIGH=$HIGH MED=$MED LOW=$LOW"
+          # Keep raw JSON for node script
+          printf '%s' "$CODE_SCANNING_JSON" > code-scanning-alerts.json
+          # Persist env counts for node (added inside node too for redundancy)
+          echo "CRIT_COUNT=$CRIT" >> $GITHUB_ENV
+          echo "HIGH_COUNT=$HIGH" >> $GITHUB_ENV
+          echo "MED_COUNT=$MED" >> $GITHUB_ENV
+          echo "LOW_COUNT=$LOW" >> $GITHUB_ENV
+          # Aging already appended by node
       - name: Publish Badges (push events only)
         if: github.event_name == 'push'
         run: |
           set -e
           SAFE_BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
           mkdir -p badges/history
+          # Sonar severities added to counts (BLOCKER & CRITICAL -> critical, MAJOR->high, MINOR->medium)
+          SONAR_BLOCKER=${{ needs.sonar.outputs.sonar_blocker || '0' }}
+          SONAR_CRITICAL=${{ needs.sonar.outputs.sonar_critical || '0' }}
+          SONAR_MAJOR=${{ needs.sonar.outputs.sonar_major || '0' }}
+            SONAR_MINOR=${{ needs.sonar.outputs.sonar_minor || '0' }}
+          CRIT_COUNT=$(( ${CRIT_COUNT:-0} + SONAR_BLOCKER + SONAR_CRITICAL ))
+          HIGH_COUNT=$(( ${HIGH_COUNT:-0} + SONAR_MAJOR ))
+          MED_COUNT=$(( ${MED_COUNT:-0} + SONAR_MINOR ))
+          export CRIT_COUNT HIGH_COUNT MED_COUNT
+          # Integrate SBOM vulnerability env vars if set
+          CVE_CRIT=${CVE_CRIT:-0}
+          CVE_HIGH=${CVE_HIGH:-0}
+          CVE_MED=${CVE_MED:-0}
+          SECRET_COUNT=${SECRET_COUNT:-0}
+          LICENSE_ISSUES=${LICENSE_ISSUES:-0}
+          # If secret-signals artifact present, override SECRET_COUNT
+          if [ -f secret-artifact/secret-signals.json ]; then
+            SC=$(jq -r '.count // 0' secret-artifact/secret-signals.json 2>/dev/null || echo 0)
+            SECRET_COUNT=$SC
+          fi
+          ########################################################################
+          # Risk Score (heurística estendida)                                    #
+          # Objetivo: síntese executiva de risco técnico.                        #
+          # Fórmula (base 100 - penalidades):                                    #
+          #  Coverage gate fail: -30                                             #
+          #  Cobertura média <85: -10 | [85,90): -5                              #
+          #  Diff coverage <80: -15 | [80,90): -5                                #
+          #  CodeQL não success: -15                                             #
+          #  Semgrep não success: -10                                            #
+          #  Sonar não success: -10                                              #
+          #  Severidades (CodeScanning+Semgrep+Sonar): Critical:-12 High:-8 Medium:-4 (cap 40) #
+          #  Aging médio (dias) alertas: >14d:-10  >7d:-6  >3d:-3                #
+          #  CVEs (SBOM->OSV): Critical:-10 High:-6 Medium:-3 (cap 35)           #
+          #  Secrets (Gitleaks): cada achado -10 (cap 40)                        #
+          #  Licenças não permitidas: cada -5 (cap 20)                           #
+          #  Clamped 0..100                                                      #
+          # Observação: Aging / severidades obtidos de artefatos se presentes;   #
+          # caso contrário, assumidos como zero (não penaliza).                  #
+          ########################################################################
+          COV_AVG="${{ needs['coverage-gate'].outputs.coverage_avg }}"
+          COV_GATE="${{ needs['coverage-gate'].outputs.coverage_gate }}"
+          DIFF_PCT="${{ needs['diff-coverage'].outputs.diff_pct }}"
+          CODEQL_RESULT="${{ needs.codeql.result }}"
+            SONAR_RESULT="${{ needs.sonar.result }}"
+          SEMGREP_RESULT="${{ needs.semgrep.result }}"
+          risk=100
+          # Coverage gate
+          if [ "${COV_GATE}" = "fail" ]; then risk=$((risk-30)); fi
+          # Coverage average numeric check
+          if echo "$COV_AVG" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+            cov_int=${COV_AVG%.*}
+            awk 'BEGIN{exit !( '$COV_AVG' < 85 )}' || risk=$((risk-10))
+            awk 'BEGIN{exit !( '$COV_AVG' >= 85 && '$COV_AVG' < 90 )}' && risk=$((risk-5)) || true
+          fi
+          # Diff coverage
+          if echo "$DIFF_PCT" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+            awk 'BEGIN{exit !( '$DIFF_PCT' < 80 )}' || risk=$((risk-15))
+            awk 'BEGIN{exit !( '$DIFF_PCT' >= 80 && '$DIFF_PCT' < 90 )}' && risk=$((risk-5)) || true
+          fi
+          # Tool results (treat success vs others)
+          [ "$CODEQL_RESULT" = "success" ] || risk=$((risk-15))
+          [ "$SEMGREP_RESULT" = "success" ] || risk=$((risk-10))
+          [ "$SONAR_RESULT" = "success" ] || risk=$((risk-10))
+          # Clamp
+          if [ $risk -lt 0 ]; then risk=0; fi
+          if [ $risk -gt 100 ]; then risk=100; fi
+          # Color scale
+          if [ $risk -ge 90 ]; then RISK_COLOR=brightgreen; elif [ $risk -ge 75 ]; then RISK_COLOR=green; elif [ $risk -ge 60 ]; then RISK_COLOR=yellow; elif [ $risk -ge 40 ]; then RISK_COLOR=orange; else RISK_COLOR=red; fi
+                  - name: Correlate SBOM -> OSV (CVE summary)
+                    if: github.event_name == 'push'
+                    run: |
+                      set -e
+                      if [ -f sbom-artifact/combined.json ]; then
+                        echo "Running OSV scan (batched)";
+                        node <<'EOF'
+                        const fs=require('fs');
+                        const path='sbom-artifact/combined.json';
+                        let bom={};
+                        try{ bom=JSON.parse(fs.readFileSync(path,'utf8')); }catch{ bom.components=[]; }
+                        const pkgs=[];
+                        for(const c of bom.components||[]){
+                          if(!c.purl) continue;
+                          const match=c.purl.match(/^pkg:(?<type>[^/]+)\/([^@]+)@(?<ver>.+)$/);
+                          if(match){
+                            const type=match.groups.type;
+                            if(type==='npm'){
+                              const name=c.purl.split('/')[1].split('@')[0];
+                              const version=c.version || match.groups.ver;
+                              pkgs.push({ package: { name, ecosystem: 'npm' }, version });
+                            }
+                          }
+                        }
+                        const unique=pkgs.slice(0,100);
+                        const queries=unique.map(p=>({ package: { name:p.package.name, ecosystem:p.package.ecosystem }, version: p.version }));
+                        const body={ queries };
+                        const https=require('https');
+                        function postOSV(payload){
+                          return new Promise((resolve)=>{
+                            const req=https.request({method:'POST', host:'api.osv.dev', path:'/v1/querybatch', headers:{'Content-Type':'application/json'}},res=>{
+                              let data='';res.on('data',d=>data+=d);res.on('end',()=>resolve(data));});
+                            req.on('error',()=>resolve('{}'));
+                            req.write(JSON.stringify(payload));
+                            req.end();
+                          });
+                        }
+                        (async()=>{
+                          let raw='{}';
+                          try{ raw=await postOSV(body);}catch{}
+                          let json={results:[]};
+                          try{ json=JSON.parse(raw);}catch{}
+                          let crit=0, high=0, med=0;
+                          for(const r of json.results||[]){
+                            for(const v of r.vulns||[]){
+                              let base=null;
+                              if(v.severity){
+                                for(const s of v.severity){ if(s.type==='CVSS_V3'){ const m=s.score.match(/(\d+\.\d+)/); if(m){ base=parseFloat(m[1]); break;} } }
+                              }
+                              if(base!=null){
+                                if(base>=9) crit++; else if(base>=7) high++; else if(base>=4) med++;
+                              } else {
+                                const alias=(v.database_specific && v.database_specific.severity)||'';
+                                if(/critical/i.test(alias)) crit++; else if(/high/i.test(alias)) high++; else if(/medium/i.test(alias)) med++;
+                              }
+                            }
+                          }
+                          fs.writeFileSync('badges/sbom-vuln-summary.json', JSON.stringify({critical:crit,high:high,medium:med},null,2));
+                          fs.appendFileSync(process.env.GITHUB_ENV, `CVE_CRIT=${crit}\nCVE_HIGH=${high}\nCVE_MED=${med}\n`);
+                        })();
+                        EOF
+                      else
+                        echo "No SBOM combined.json found; skipping OSV";
+                      fi
+          mkdir -p badges
+          # --- Coleta simplificada de severidades (placeholders se SARIF/sonar summary indisponíveis) ---
+          critical=${CRIT_COUNT:-0}; high=${HIGH_COUNT:-0}; medium=${MED_COUNT:-0}
+          aging_days=${AGING_DAYS:-0}
+          sev_penalty=$((critical*12 + high*8 + medium*4))
+          [ $sev_penalty -gt 40 ] && sev_penalty=40 || true
+          cve_penalty=$((CVE_CRIT*10 + CVE_HIGH*6 + CVE_MED*3))
+          [ $cve_penalty -gt 35 ] && cve_penalty=35 || true
+          secret_penalty=$((SECRET_COUNT*10))
+          [ $secret_penalty -gt 40 ] && secret_penalty=40 || true
+          license_penalty=$((LICENSE_ISSUES*5))
+          [ $license_penalty -gt 20 ] && license_penalty=20 || true
+          risk=$((risk - sev_penalty))
+          risk=$((risk - cve_penalty))
+          risk=$((risk - secret_penalty))
+          risk=$((risk - license_penalty))
+          if [ $aging_days -gt 14 ]; then risk=$((risk-10)); elif [ $aging_days -gt 7 ]; then risk=$((risk-6)); elif [ $aging_days -gt 3 ]; then risk=$((risk-3)); fi
+          if [ $risk -lt 0 ]; then risk=0; fi
+          if [ $risk -gt 100 ]; then risk=100; fi
+          # Color scale
+          if [ $risk -ge 90 ]; then RISK_COLOR=brightgreen; elif [ $risk -ge 75 ]; then RISK_COLOR=green; elif [ $risk -ge 60 ]; then RISK_COLOR=yellow; elif [ $risk -ge 40 ]; then RISK_COLOR=orange; else RISK_COLOR=red; fi
+          mkdir -p badges
+          echo '{"schemaVersion":1,"label":"risk score","message":"'"$risk"'","color":"'"$RISK_COLOR"'"}' > badges/risk-score-badge.json
+          # Branch-qualified copy (para deltas futuros)
+          cp badges/risk-score-badge.json badges/risk-score-badge-${SAFE_BRANCH}.json || true
+          # Histórico de risk score
+          RISK_HISTORY=badges/history/risk-score-history-${SAFE_BRANCH}.json
+          node - <<'EOF'
+          const fs=require('fs');
+          const file=process.env.RISK_HISTORY;
+          let data=[]; try{ data=JSON.parse(fs.readFileSync(file,'utf8')); }catch{}
+          const risk=parseInt(process.env.RISK_VALUE,10);
+          const breakdownFile=`badges/risk-score-latest-${process.env.SAFE_BRANCH}.json`;
+          // Breakdown components (rough - some variables passed by env)
+          const comp={
+            coverageGate: process.env.COV_GATE==='fail'? -30:0,
+            coverageAvg: (()=>{ const v=parseFloat(process.env.COV_AVG||'0'); if(!Number.isFinite(v)) return 0; if(v<85) return -10; if(v<90) return -5; return 0; })(),
+            diffCoverage: (()=>{ const v=parseFloat(process.env.DIFF_PCT||'0'); if(!Number.isFinite(v)) return 0; if(v<80) return -15; if(v<90) return -5; return 0; })(),
+            codeql: process.env.CODEQL_RESULT==='success'?0:-15,
+            semgrep: process.env.SEMGREP_RESULT==='success'?0:-10,
+            sonar: process.env.SONAR_RESULT==='success'?0:-10,
+            severities: parseInt(process.env.SEV_PENALTY||'0',10)||0,
+            cves: parseInt(process.env.CVE_PENALTY||'0',10)||0,
+            secrets: parseInt(process.env.SECRET_PENALTY||'0',10)||0,
+            licenses: parseInt(process.env.LICENSE_PENALTY||'0',10)||0,
+            aging: (()=>{ const a=parseFloat(process.env.AGING_DAYS||'0'); if(a>14) return -10; if(a>7) return -6; if(a>3) return -3; return 0; })()
+          };
+          const totalPen=Object.values(comp).reduce((a,b)=>a+b,0);
+          const snapshot={ score:risk, components:comp, totalPenalty: totalPen, generatedAt: new Date().toISOString() };
+          fs.writeFileSync(breakdownFile, JSON.stringify(snapshot,null,2));
+          if(Number.isFinite(risk)){
+            data.push({t:Math.floor(Date.now()/1000),score:risk});
+            data=data.slice(-199);
+            fs.writeFileSync(file, JSON.stringify(data,null,2));
+          }
+          EOF
+          echo "SEV_PENALTY=$sev_penalty" >> $GITHUB_ENV
+          echo "CVE_PENALTY=$cve_penalty" >> $GITHUB_ENV
+          echo "SECRET_PENALTY=$secret_penalty" >> $GITHUB_ENV
+          echo "LICENSE_PENALTY=$license_penalty" >> $GITHUB_ENV
+          echo "Generated risk-score-badge.json (risk=$risk color=$RISK_COLOR sevPenalty=$sev_penalty cvePenalty=$cve_penalty secretPenalty=$secret_penalty licensePenalty=$license_penalty aging=$aging_days)"
+          export RISK_VALUE=$risk
           if [ -f diff-coverage/diff-coverage-badge.json ]; then
             DIFF_PCT=$(jq -r '.message' diff-coverage/diff-coverage-badge.json 2>/dev/null | tr -d '%')
             if [ -n "$DIFF_PCT" ]; then
@@ -672,3 +1116,88 @@ jobs:
             } else {
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body: `${marker}\n${extended}` });
             }
+  update-readme-badges:
+    name: Update README badges section (Orchestrator parity)
+    runs-on: ubuntu-latest
+    needs: [finalize]
+    if: always() && github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Update README badge block
+        env:
+          HEAD_BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr '/:' '-')
+          BADGES_DIR="https://raw.githubusercontent.com/${REPO}/badges/badges"
+          BUILD_BRANCH_URL="${BADGES_DIR}/build-status-badge-${SAFE_BRANCH}.json"
+          COVERAGE_BRANCH_URL="${BADGES_DIR}/coverage-badge-${SAFE_BRANCH}.json"
+          COVERAGE_GATE_BRANCH_URL="${BADGES_DIR}/coverage-gate-badge-${SAFE_BRANCH}.json"
+          COVERAGE_DELTA_BRANCH_URL="${BADGES_DIR}/coverage-delta-badge-${SAFE_BRANCH}.json"
+          COVERAGE_TREND_BRANCH_URL="${BADGES_DIR}/coverage-trend-badge-${SAFE_BRANCH}.json"
+          DIFF_COVERAGE_BRANCH_URL="${BADGES_DIR}/diff-coverage-badge-${SAFE_BRANCH}.json"
+          DIFF_COVERAGE_BASE_URL="${BADGES_DIR}/diff-coverage-badge-master.json"
+          RISK_SCORE_BRANCH_URL="${BADGES_DIR}/risk-score-badge-${SAFE_BRANCH}.json"
+          RISK_SCORE_BASE_URL="${BADGES_DIR}/risk-score-badge-master.json"
+          BASE_COVERAGE_URL="${BADGES_DIR}/coverage-badge-master.json"
+          BASE_GATE_URL="${BADGES_DIR}/coverage-gate-badge-master.json"
+          echo "<!-- BADGES-AUTO-START -->" > /tmp/_badge_block.md
+          echo "![Build (${HEAD_BRANCH})](https://img.shields.io/endpoint?url=${BUILD_BRANCH_URL})" >> /tmp/_badge_block.md
+          if [ "$HEAD_BRANCH" != "master" ]; then
+            echo "![Coverage (baseline master)](https://img.shields.io/endpoint?url=${BASE_COVERAGE_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (baseline master)](https://img.shields.io/endpoint?url=${BASE_GATE_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage (this branch)](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (this branch)](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+            if curl -sf -I "${DIFF_COVERAGE_BASE_URL}" >/dev/null; then echo "![Diff Coverage (baseline master)](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BASE_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${DIFF_COVERAGE_BRANCH_URL}" >/dev/null; then echo "![Diff Coverage (this branch)](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${COVERAGE_DELTA_BRANCH_URL}" >/dev/null; then echo "![Coverage Delta](https://img.shields.io/endpoint?url=${COVERAGE_DELTA_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${COVERAGE_TREND_BRANCH_URL}" >/dev/null; then echo "![Coverage Trend](https://img.shields.io/endpoint?url=${COVERAGE_TREND_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BASE_URL}" >/dev/null; then echo "![Risk Score (baseline)](https://img.shields.io/endpoint?url=${RISK_SCORE_BASE_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score (this branch)](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+          else
+            echo "![Coverage (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md
+            echo "![Coverage Gate (baseline)](https://img.shields.io/endpoint?url=${COVERAGE_GATE_BRANCH_URL})" >> /tmp/_badge_block.md
+            if curl -sf -I "${DIFF_COVERAGE_BRANCH_URL}" >/dev/null; then echo "![Diff Coverage](https://img.shields.io/endpoint?url=${DIFF_COVERAGE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+            if curl -sf -I "${RISK_SCORE_BRANCH_URL}" >/dev/null; then echo "![Risk Score](https://img.shields.io/endpoint?url=${RISK_SCORE_BRANCH_URL})" >> /tmp/_badge_block.md; fi
+          fi
+          echo "![Orchestrator](https://github.com/${REPO}/actions/workflows/orchestrator.yml/badge.svg)" >> /tmp/_badge_block.md
+          SONAR_PROJECT_KEY="github_poc-task-manager-herooffer-ghc"
+          echo "![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=alert_status)" >> /tmp/_badge_block.md
+          echo "![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=coverage)" >> /tmp/_badge_block.md
+          echo "![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=bugs)" >> /tmp/_badge_block.md
+          echo "![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=vulnerabilities)" >> /tmp/_badge_block.md
+          echo "![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=code_smells)" >> /tmp/_badge_block.md
+          echo "![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=sqale_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=reliability_rating)" >> /tmp/_badge_block.md
+          echo "![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=${SONAR_PROJECT_KEY}&metric=security_rating)" >> /tmp/_badge_block.md
+          echo "<!-- BADGES-AUTO-END -->" >> /tmp/_badge_block.md
+          if grep -q 'BADGES-AUTO-START' README.md; then
+            sed -i '/BADGES-AUTO-START/,/BADGES-AUTO-END/d' README.md
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          else
+            if grep -n '^# ' README.md >/dev/null; then
+              awk 'NR==1{print; system("cat /tmp/_badge_block.md"); next} {print}' README.md > README.new && mv README.new README.md
+            else
+              cat /tmp/_badge_block.md README.md > README.new && mv README.new README.md
+            fi
+          fi
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add README.md || true
+          if git diff --cached --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "docs(badges): update README badges block for ${HEAD_BRANCH}" || true
+          fi
+      - name: Push README update
+        if: success()
+        run: |
+          git push origin HEAD:${GITHUB_REF_NAME:-${GITHUB_REF_NAME}} || echo "Push skipped"
