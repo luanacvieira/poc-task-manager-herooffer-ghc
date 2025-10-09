@@ -9,13 +9,13 @@
 <section>
   <h2>KPIs Principais</h2>
   <div class="kpi-grid">
-    <div class="kpi"><h3>Coverage Média</h3><div class="val">NaN%</div></div>
+    <div class="kpi"><h3>Coverage Média</h3><div class="val">0.00%</div></div>
     <div class="kpi"><h3>Delta Último Ponto</h3><div class="val trendUp">+0.00%</div></div>
     <div class="kpi"><h3>Diff Coverage (Último)</h3><div class="val">n/a</div></div>
     <div class="kpi"><h3>Alertas de Segurança Abertos</h3><div class="val">22</div></div>
-    <div class="kpi"><h3>Duração Média Pipeline</h3><div class="val">197.17s</div></div>
-    <div class="kpi"><h3>p95 Duração</h3><div class="val">289s</div></div>
-    <div class="kpi"><h3>Índice Composto de Risco</h3><div class="val">NaN</div></div>
+    <div class="kpi"><h3>Duração Média Pipeline</h3><div class="val">231.37s</div></div>
+    <div class="kpi"><h3>p95 Duração</h3><div class="val">308s</div></div>
+    <div class="kpi"><h3>Índice Composto de Risco</h3><div class="val">10</div></div>
   </div>
 </section>
 
@@ -36,13 +36,13 @@
   <ul>
     <li>Histórico: branch <code>badges</code> (arquivos JSON em <code>badges/history</code>).</li>
     <li>Alertas: API Code Scanning (open state).</li>
-    <li>Performance: Últimos 18 runs do workflow "Orchestrator Pipeline".</li>
+    <li>Performance: Últimos 19 runs do workflow "Orchestrator Pipeline".</li>
   </ul>
 </section>
 
-<footer>Gerado em 2025-10-09T21:39:36.878Z • Atualize o pipeline para números mais recentes.</footer>
+<footer>Gerado em 2025-10-09T22:07:06.812Z • Atualize o pipeline para números mais recentes.</footer>
 <script>
-  const coverageHist = [{"timestamp":"2025-10-09T17:26:27Z","branch":"master","safeBranch":"master","coverage":94.7}];
+  const coverageHist = [];
   const labels = coverageHist.map(p=> new Date(p.t*1000).toLocaleDateString());
   const data = coverageHist.map(p=> parseFloat(p.avg));
   if (coverageHist.length) {
