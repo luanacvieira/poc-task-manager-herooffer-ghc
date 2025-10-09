@@ -22,8 +22,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "prebuild": "node ../scripts/ensure-ajv6.js",
-    "build": "npm run prebuild && react-scripts build",
+    "build": "react-scripts build",
     "test": "cross-env NODE_OPTIONS=--max_old_space_size=2048 react-scripts test --watchAll=false --coverage --coverageReporters=lcov --coverageReporters=json-summary",
     "eject": "react-scripts eject",
     "lint": "eslint src --ext .ts,.tsx",
@@ -50,14 +49,10 @@
   "proxy": "http://localhost:3001"
   ,"devDependencies": {
     "cross-env": "7.0.3",
-    "jest": "27.5.1",
-    "ajv": "6.12.6",
-    "ajv-keywords": "3.5.2"
+    "jest": "27.5.1"
   },
   "overrides": {
     "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "ajv": "6.12.6",
-    "ajv-keywords": "3.5.2"
+    "react-dom": "18.2.0"
   }
 }
