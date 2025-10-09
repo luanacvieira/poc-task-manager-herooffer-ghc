@@ -31,7 +31,8 @@ beforeAll(() => {
             args[0].includes('`ReactDOMTestUtils.act` is deprecated') ||
             // Suprimir warnings de act() para reduzir ruído enquanto os testes já
             // utilizam user-event que envolve internamente updates assíncronos.
-            args[0].includes('Warning: An update to') && args[0].includes('was not wrapped in act'))
+            (args[0].includes('Warning: An update to') && args[0].includes('was not wrapped in act')) ||
+            args[0].startsWith('Erro ao criar task:'))
         ) {
             return;
         }
