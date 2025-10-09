@@ -49,10 +49,14 @@
   "proxy": "http://localhost:3001"
   ,"devDependencies": {
     "cross-env": "7.0.3",
-    "jest": "27.5.1"
+    "jest": "27.5.1",
+    "ajv": "6.12.6",
+    "ajv-keywords": "3.5.2"
   },
   "overrides": {
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "ajv": "6.12.6",
+    "ajv-keywords": "3.5.2"
   }
 }
