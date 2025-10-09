@@ -51,5 +51,9 @@
     "ajv": "8.17.1",
     "ajv-keywords": "5.1.0"
     ,"jest": "27.5.1"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   }
 }
