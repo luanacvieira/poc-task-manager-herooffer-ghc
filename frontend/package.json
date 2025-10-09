@@ -22,7 +22,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "prebuild": "node ../scripts/ensure-ajv6.js",
+    "build": "npm run prebuild && react-scripts build",
     "test": "cross-env NODE_OPTIONS=--max_old_space_size=2048 react-scripts test --watchAll=false --coverage --coverageReporters=lcov --coverageReporters=json-summary",
     "eject": "react-scripts eject",
     "lint": "eslint src --ext .ts,.tsx",
