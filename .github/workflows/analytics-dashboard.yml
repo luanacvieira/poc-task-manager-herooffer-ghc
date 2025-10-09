@@ -17,6 +17,7 @@ permissions:
 env:
   TARGET_BRANCH: badges
   DASHBOARD_DIR: docs/analytics-dashboard
+  PUBLISH_GHPAGES: true
 
 jobs:
   generate-dashboard:
@@ -87,6 +88,64 @@ jobs:
           # Cleanup opcional: remover worktree para não poluir workspace de runner
           git worktree prune || true
           rm -rf _badges_worktree || true
+      - name: Publicar em gh-pages (GitHub Pages)
+        if: env.PUBLISH_GHPAGES == 'true'
+        run: |
+          set -e
+          echo "== Publicação GitHub Pages =="
+          GH_BRANCH=gh-pages
+          # Preparar worktree
+          if git ls-remote --exit-code origin $GH_BRANCH >/dev/null 2>&1; then
+            git fetch origin $GH_BRANCH:$GH_BRANCH || true
+            git worktree add _ghpages_worktree $GH_BRANCH
+          else
+            git worktree add -b $GH_BRANCH _ghpages_worktree
+          fi
+          mkdir -p _ghpages_worktree/analytics-dashboard
+          cp -R $DASHBOARD_DIR/* _ghpages_worktree/analytics-dashboard/ 2>/dev/null || true
+          # Index principal apontando para a pasta gerada
+          if [ ! -f _ghpages_worktree/index.html ]; then
+            printf '%s\n' '<!DOCTYPE html>' \
+              '<html lang="pt-br">' \
+              '  <head>' \
+              '    <meta charset="UTF-8" />' \
+              '    <title>Analytics Dashboards</title>' \
+              '    <meta name="viewport" content="width=device-width,initial-scale=1" />' \
+              '    <style>' \
+              '      body{font-family:system-ui,Arial,sans-serif;margin:40px;}' \
+              '      a{color:#2563eb;text-decoration:none;}' \
+              '      a:hover{text-decoration:underline;}' \
+              '      ul{line-height:1.6}' \
+              '      footer{margin-top:40px;font-size:12px;color:#666}' \
+              '      code{background:#f5f5f5;padding:2px 4px;border-radius:4px}' \
+              '    </style>' \
+              '  </head>' \
+              '  <body>' \
+              '    <h1>Dashboards Analíticos</h1>' \
+              '    <p><a href="analytics-dashboard/" rel="noopener">Abrir dashboard atual</a></p>' \
+              '    <ul><li>Diretório: <code>analytics-dashboard/</code></li></ul>' \
+              '    <footer>Gerado automaticamente via workflow analytics-dashboard.yml</footer>' \
+              '  </body>' \
+              '</html>' > _ghpages_worktree/index.html
+          fi
+          (
+            cd _ghpages_worktree
+            if git status --porcelain | grep -q .; then
+              git config user.name 'github-actions'
+              git config user.email 'actions@github.com'
+              git add .
+              git commit -m "chore(pages): atualizar dashboard em gh-pages"
+              git push origin $GH_BRANCH || (
+                echo "Push inicial falhou, tentando pull --rebase";
+                git pull --rebase origin $GH_BRANCH || true
+                git push origin $GH_BRANCH || echo "Falha push gh-pages";
+              )
+            else
+              echo "Nenhuma alteração para gh-pages."
+            fi
+          )
+          git worktree prune || true
+          rm -rf _ghpages_worktree || true
       # Passo opcional (desabilitado): Publicar em gh-pages
       # - name: Publicar em gh-pages
       #   if: ${{ false }}
