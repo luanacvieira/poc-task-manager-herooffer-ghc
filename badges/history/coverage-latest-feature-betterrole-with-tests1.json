@@ -1,0 +1,32 @@
+{
+  "avg": "95.76",
+  "metrics": {
+    "lines": {
+      "total": 133,
+      "covered": 128,
+      "pct": "96.24"
+    },
+    "statements": {
+      "total": 147,
+      "covered": 141,
+      "pct": "95.92"
+    },
+    "functions": {
+      "total": 28,
+      "covered": 27,
+      "pct": "96.43"
+    },
+    "branches": {
+      "total": 92,
+      "covered": 83,
+      "pct": "90.22"
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "pct": "100.00"
+    }
+  },
+  "pass": true,
+  "fails": []
+}
