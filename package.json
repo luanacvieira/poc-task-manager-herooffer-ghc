@@ -13,6 +13,13 @@
     "eslint-plugin-security": "^1.7.1"
   },
   "scripts": {
-    "lint": "eslint backend frontend"
+    "lint": "eslint backend frontend",
+    "preinstall": "node ./scripts/enforce-react-version.js"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "@types/react": "18.2.48",
+    "@types/react-dom": "18.2.18"
   }
 }

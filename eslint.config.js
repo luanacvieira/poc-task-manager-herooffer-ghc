@@ -50,7 +50,7 @@ module.exports = [
     rules: {
       ...js.configs.recommended.rules,
       ...(security.configs?.recommended?.rules || {}),
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+  'no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
     }
   },
   // Frontend TS/TSX (React)
@@ -72,7 +72,7 @@ module.exports = [
       ...(reactPlugin.configs?.recommended?.rules||{}),
       ...(reactHooks.configs?.recommended?.rules||{}),
       'react/prop-types': 'off',
-      ...(tseslint ? {'@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]} : {})
+  ...(tseslint ? {'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]} : {})
     },
     settings: { react: { version: 'detect' } }
   } : null

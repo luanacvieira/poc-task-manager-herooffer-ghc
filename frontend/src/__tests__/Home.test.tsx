@@ -14,10 +14,13 @@ const mockedAxios = axios as unknown as {
 
 // Mock do TaskForm component
 jest.mock('../components/TaskForm', () => {
-    return function MockTaskForm({ onTaskAdded }: { onTaskAdded: () => void }) {
+    return function MockTaskForm({ onTaskAdded: _onTaskAdded }: { onTaskAdded: () => void }) {
+        // Ajuste: Reintroduzimos o botão para que o teste "should refresh tasks when TaskForm triggers onTaskAdded" passe.
+        // Usamos _onTaskAdded (underscore) para não violar no-unused-vars.
         return (
             <div data-testid="task-form">
-                <button onClick={onTaskAdded}>Add Task</button>
+                <button onClick={() => _onTaskAdded()}>Add Task</button>
+                <span style={{fontSize:'0.7rem',opacity:0.5,display:'block'}}>Mock TaskForm (botão restaurado para o teste)</span>
             </div>
         );
     };

@@ -2,9 +2,9 @@ name: Semgrep SAST
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, develop ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, develop ]
   schedule:
     - cron: '30 3 * * 1'  # Semanal (segunda 03:30 UTC)
   workflow_dispatch:
