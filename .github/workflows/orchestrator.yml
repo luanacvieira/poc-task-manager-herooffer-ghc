@@ -269,7 +269,7 @@ jobs:
           run: bash .github/scripts/prepare-sonar-coverage.sh
         - name: Sonar Scan
           if: steps.sonar_guard.outputs.SKIP == 'false'
-          uses: SonarSource/sonarcloud-github-action@v2
+          uses: SonarSource/sonarcloud-github-action@v5
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
