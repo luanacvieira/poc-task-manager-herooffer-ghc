@@ -150,6 +150,7 @@ jobs:
         - name: Install & Build
           run: |
             if [ "${{ matrix.target }}" = backend ]; then (cd backend && (npm ci || npm install --legacy-peer-deps) && bash ../.github/scripts/build-backend.sh); else (cd frontend && (npm ci || npm install --legacy-peer-deps) && bash ../.github/scripts/build-frontend.sh); fi
+
     codeql:
       name: CodeQL
       needs: [build]
@@ -285,6 +286,7 @@ jobs:
         - name: Sonar Summary
           run: |
             if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY; echo "Skipped (fork or missing secret)" >> $GITHUB_STEP_SUMMARY; else echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY; echo "Analysis executed." >> $GITHUB_STEP_SUMMARY; fi
+
     package-backend:
       name: Publish Backend Image
       needs: [build]
@@ -304,6 +306,7 @@ jobs:
             TAG=$(echo "$GITHUB_REF_NAME" | tr '/' '-')
             docker build -t $IMAGE_NAME:$TAG backend
             docker push $IMAGE_NAME:$TAG
+
     deploy-qa:
       name: Deploy QA (Demo)
       needs: [build, coverage-gate, codeql, security, sonar]
