@@ -24,498 +24,355 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install root + workspaces deps (peer-safe)
-        run: bash ./.github/scripts/install-clean.sh
-      - name: Lint (flat config)
-        run: |
-          npx eslint backend frontend
+    lint:
+      name: Lint
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: npm
+        - name: Install root deps
+          run: bash ./.github/scripts/install-clean.sh
+        - name: ESLint
+          run: npx eslint backend frontend
 
-  typecheck:
-    name: Type Check (Frontend)
-    runs-on: ubuntu-latest
-    needs: [lint]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install frontend deps
-        working-directory: frontend
-        run: bash ../.github/scripts/install-frontend.sh
-      - name: TypeScript Check
-        working-directory: frontend
-        run: npx tsc --noEmit
+    quality:
+      name: Type Check
+      needs: [lint]
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: npm
+        - name: Install frontend deps
+          working-directory: frontend
+          run: bash ../.github/scripts/install-frontend.sh
+        - name: TypeScript Check
+          working-directory: frontend
+          run: npx tsc --noEmit
 
-  test-backend:
-    name: Test Backend
-    runs-on: ubuntu-latest
-    needs: [typecheck]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install backend deps
-        working-directory: backend
-        run: bash ../.github/scripts/install-backend.sh
-      - name: Run Backend Tests
-        working-directory: backend
-        run: bash ../.github/scripts/backend-tests.sh
-      - name: Upload Backend Coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage-unit/
+    tests:
+      name: Tests (${{ matrix.target }})
+      needs: [quality]
+      runs-on: ubuntu-latest
+      strategy:
+        fail-fast: false
+        matrix:
+          target: [backend, frontend]
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: npm
+        - name: Install
+          run: |
+            if [ "${{ matrix.target }}" = backend ]; then (cd backend && (npm ci || npm install --legacy-peer-deps)); else (cd frontend && (npm ci || npm install --legacy-peer-deps)); fi
+        - name: Run tests
+          run: |
+            if [ "${{ matrix.target }}" = backend ]; then (cd backend && bash ../.github/scripts/backend-tests.sh); else (cd frontend && CI=true bash ../.github/scripts/frontend-tests.sh); fi
+        - name: Upload Coverage
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: ${{ matrix.target }}-coverage
+            path: ${{ matrix.target == 'backend' && 'backend/coverage-unit' || 'frontend/coverage' }}/
 
-  test-frontend:
-    name: Test Frontend
-    runs-on: ubuntu-latest
-    needs: [typecheck]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install frontend deps
-        working-directory: frontend
-        run: |
-          (npm ci || npm install --legacy-peer-deps)
-      - name: Run Frontend Tests
-        working-directory: frontend
-        env:
-          CI: true
-        run: bash ../.github/scripts/frontend-tests.sh
-      - name: Upload Frontend Coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend/coverage/
+    coverage-gate:
+      name: Coverage Gate
+      needs: [tests]
+      runs-on: ubuntu-latest
+      outputs:
+        coverage_avg: ${{ steps.combine.outputs.avg }}
+        coverage_gate: ${{ steps.combine.outputs.gate }}
+      steps:
+        - uses: actions/checkout@v4
+        - name: Download coverage artifacts
+          uses: actions/download-artifact@v4
+          with:
+            path: coverage-artifacts
+        - name: Combine & Enforce
+          id: combine
+          run: bash .github/scripts/coverage-gate.sh
+        - uses: actions/upload-artifact@v4
+          with:
+            name: combined-coverage
+            path: combined-coverage
 
-  coverage-gate:
-    name: Coverage Gate (>=80%)
-    runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
-    outputs:
-      coverage_avg: ${{ steps.combine.outputs.avg }}
-      coverage_gate: ${{ steps.combine.outputs.gate }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download Coverage Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: coverage-artifacts
-      - name: Combine & Enforce Coverage
-        id: combine
-        run: bash .github/scripts/coverage-gate.sh
-      - name: Upload Combined Coverage Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined-coverage
-          path: combined-coverage
+    diff-coverage:
+      name: Diff Coverage
+      needs: [tests]
+      runs-on: ubuntu-latest
+      outputs:
+        diff_pct: ${{ steps.diffcalc.outputs.pct }}
+        diff_pass: ${{ steps.diffcalc.outputs.pass }}
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+        - name: Changed Files
+          id: changed
+          env:
+            PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          run: bash .github/scripts/changed-files.sh
+        - uses: actions/download-artifact@v4
+          with:
+            path: diff-cov-artifacts
+        - name: Compute Diff Coverage
+          id: diffcalc
+          env:
+            CHANGED_LIST: ${{ steps.changed.outputs.list }}
+            DIFF_THRESHOLD: 80
+            ARTIFACT_ROOT: diff-cov-artifacts
+          run: bash .github/scripts/diff-coverage.sh
+        - uses: actions/upload-artifact@v4
+          with:
+            name: diff-coverage
+            path: diff-coverage
 
-  build-backend:
-    name: Build Backend
-    runs-on: ubuntu-latest
-    needs: [coverage-gate]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install backend deps
-        working-directory: backend
-        run: |
-          (npm ci || npm install --legacy-peer-deps)
-      - name: Backend smoke
-        working-directory: backend
-        run: bash ../.github/scripts/build-backend.sh
+    build:
+      name: Build (${{ matrix.target }})
+      needs: [coverage-gate]
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          target: [backend, frontend]
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: npm
+        - name: Install & Build
+          run: |
+            if [ "${{ matrix.target }}" = backend ]; then (cd backend && (npm ci || npm install --legacy-peer-deps) && bash ../.github/scripts/build-backend.sh); else (cd frontend && (npm ci || npm install --legacy-peer-deps) && bash ../.github/scripts/build-frontend.sh); fi
 
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: [build-backend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install frontend deps
-        working-directory: frontend
-        run: bash ../.github/scripts/build-frontend.sh
+    codeql:
+      name: CodeQL
+      needs: [build]
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+        security-events: write
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+        - name: Init
+          uses: github/codeql-action/init@v3
+          with:
+            languages: javascript
+            build-mode: none
+        - name: Analyze
+          uses: github/codeql-action/analyze@v3
+          with:
+            category: '/language:javascript'
+        - run: ls -R ./codeql* || true
 
-  codeql:
-    name: CodeQL Analyze
-    runs-on: ubuntu-latest
-    needs: [build-frontend]
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Init CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript
-          build-mode: none
-        env:
-          CODEQL_ACTION_DEBUG: true
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: '/language:javascript'
-        env:
-          CODEQL_ACTION_DEBUG: true
-      - name: CodeQL SARIF existence debug
-        run: |
-          ls -R ./codeql* || true
-          echo "Listing uploaded SARIF (post-action cannot access, but we verify working directory)."
+    security:
+      name: Security & SBOM
+      needs: [build]
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+        - name: SBOM
+          run: bash .github/scripts/sbom.sh
+        - uses: actions/upload-artifact@v4
+          with:
+            name: sbom
+            path: sbom
+        - name: Gitleaks
+          run: bash .github/scripts/secrets-scan.sh
+        - name: Upload Gitleaks SARIF
+          if: always()
+          continue-on-error: true
+          uses: github/codeql-action/upload-sarif@v3
+          with:
+            sarif_file: gitleaks.sarif
+        - uses: actions/upload-artifact@v4
+          if: always()
+          with:
+            name: gitleaks-sarif
+            path: gitleaks.sarif
+        - name: License Scan
+          run: bash .github/scripts/licenses-scan.sh
+        - uses: actions/upload-artifact@v4
+          with:
+            name: license-signals
+            path: license-signals.json
+        - name: Semgrep
+          uses: returntocorp/semgrep-action@v1
+          with:
+            config: p/ci
+        - name: Semgrep Summary
+          run: bash .github/scripts/semgrep-summary.sh
+        - name: Semgrep SARIF
+          run: bash .github/scripts/semgrep-sarif.sh
+        - name: Upload Semgrep SARIF
+          continue-on-error: true
+          uses: github/codeql-action/upload-sarif@v3
+          with:
+            sarif_file: semgrep.sarif
+        - uses: actions/upload-artifact@v4
+          if: always()
+          with:
+            name: semgrep-sarif
+            path: semgrep.sarif
+        - uses: actions/upload-artifact@v4
+          if: always()
+          with:
+            name: secret-signals
+            path: secret-signals.json
 
+    sonar:
+      name: SonarCloud
+      needs: [build, tests]
+      runs-on: ubuntu-latest
+      outputs:
+        sonar_blocker: ${{ steps.sonar_issues.outputs.blocker || '0' }}
+        sonar_critical: ${{ steps.sonar_issues.outputs.critical || '0' }}
+        sonar_major: ${{ steps.sonar_issues.outputs.major || '0' }}
+        sonar_minor: ${{ steps.sonar_issues.outputs.minor || '0' }}
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+        - name: Guard & Prepare
+          id: sonar_guard
+          env:
+            PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          run: bash .github/scripts/sonar-guard-prepare.sh
+        - name: Download Backend Coverage
+          if: steps.sonar_guard.outputs.SKIP == 'false'
+          uses: actions/download-artifact@v4
+          with:
+            name: backend-coverage
+            path: backend-coverage-artifact
+        - name: Download Frontend Coverage
+          if: steps.sonar_guard.outputs.SKIP == 'false'
+          uses: actions/download-artifact@v4
+          with:
+            name: frontend-coverage
+            path: frontend-coverage-artifact
+        - name: Prepare Coverage
+          if: steps.sonar_guard.outputs.SKIP == 'false'
+          run: bash .github/scripts/prepare-sonar-coverage.sh
+        - name: Sonar Scan
+          if: steps.sonar_guard.outputs.SKIP == 'false'
+          uses: SonarSource/sonarcloud-github-action@v2
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          with:
+            projectBaseDir: .
+            args: -Dproject.settings=sonar-project.properties
+        - name: Collect Sonar Issues
+          id: sonar_issues
+          if: steps.sonar_guard.outputs.SKIP == 'false'
+          env:
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY }}
+          run: bash .github/scripts/sonar-collect-issues.sh
+        - name: Sonar Summary
+          run: |
+            if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY; echo "Skipped (fork or missing secret)" >> $GITHUB_STEP_SUMMARY; else echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY; echo "Analysis executed." >> $GITHUB_STEP_SUMMARY; fi
 
-  diff-coverage:
-    name: Diff Coverage (changed files)
-    runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
-    outputs:
-      diff_pct: ${{ steps.diffcalc.outputs.pct }}
-      diff_pass: ${{ steps.diffcalc.outputs.pass }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: List Changed Files
-        id: changed
-        env:
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: bash .github/scripts/changed-files.sh
-      - name: Download Coverage Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: diff-cov-artifacts
-      - name: Compute Diff Coverage
-        id: diffcalc
-        env:
-          CHANGED_LIST: ${{ steps.changed.outputs.list }}
-          DIFF_THRESHOLD: 80
-          ARTIFACT_ROOT: diff-cov-artifacts
-        run: bash .github/scripts/diff-coverage.sh
-      - name: Upload Diff Coverage Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: diff-coverage
-          path: diff-coverage
-  sbom:
-    name: SBOM (CycloneDX)
-    runs-on: ubuntu-latest
-    needs: [build-frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Generate & Package SBOMs
-        run: bash .github/scripts/sbom.sh
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom
-  sonar:
-    name: SonarCloud
-    runs-on: ubuntu-latest
-    # Added test-backend & test-frontend so we can reuse their coverage artifacts instead of re-running tests
-    needs: [build-frontend, test-backend, test-frontend]
-    outputs:
-      sonar_blocker: ${{ steps.sonar_issues.outputs.blocker || '0' }}
-      sonar_critical: ${{ steps.sonar_issues.outputs.critical || '0' }}
-      sonar_major: ${{ steps.sonar_issues.outputs.major || '0' }}
-      sonar_minor: ${{ steps.sonar_issues.outputs.minor || '0' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Guard & Prepare
-        id: sonar_guard
-        env:
-          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: bash .github/scripts/sonar-guard-prepare.sh
-      - name: Download Backend Coverage Artifact
-        if: steps.sonar_guard.outputs.SKIP == 'false'
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend-coverage-artifact
-      - name: Download Frontend Coverage Artifact
-        if: steps.sonar_guard.outputs.SKIP == 'false'
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend-coverage-artifact
-      - name: Prepare Coverage Files for Sonar
-        if: steps.sonar_guard.outputs.SKIP == 'false'
-        run: bash .github/scripts/prepare-sonar-coverage.sh
-      - name: SonarCloud Scan
-        if: steps.sonar_guard.outputs.SKIP == 'false'
-        uses: SonarSource/sonarcloud-github-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: .
-          args: -Dproject.settings=sonar-project.properties
-      - name: Collect Sonar Issue Severities
-        id: sonar_issues
-        if: steps.sonar_guard.outputs.SKIP == 'false'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY }}
-        run: bash .github/scripts/sonar-collect-issues.sh
-      - name: Sonar Summary
-        run: |
-          if [ "${{ steps.sonar_guard.outputs.SKIP }}" = "true" ]; then
-            echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
-            echo "Skipped (fork or missing secret)." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
-            echo "Analysis executed." >> $GITHUB_STEP_SUMMARY
-          fi
-  secrets-licenses:
-    name: Secrets & Licenses Scan
-    runs-on: ubuntu-latest
-    needs: [build-frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Gitleaks (secrets)
-        run: bash .github/scripts/secrets-scan.sh
-      - name: Upload Gitleaks SARIF to Code Scanning
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gitleaks.sarif
-      - name: Fallback if Gitleaks SARIF upload blocked
-        if: always()
-        run: |
-          # If previous step failed due to permissions, we still keep artifact for internal aggregation
-          echo "(Info) If 'Resource not accessible' occurred, skipping code scanning ingestion for gitleaks but continuing pipeline."
-      - name: Upload Gitleaks SARIF Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-sarif
-          path: gitleaks.sarif
-      - name: Upload Secret Signals Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: secret-signals
-          path: secret-signals.json
-      - name: License Scan (license-checker)
-        run: bash .github/scripts/licenses-scan.sh
-      - name: Upload License Signals
-        uses: actions/upload-artifact@v4
-        with:
-          name: license-signals
-          path: license-signals.json
-  semgrep:
-    name: Semgrep SAST
-    runs-on: ubuntu-latest
-    needs: [build-frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Semgrep (ci ruleset)
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: p/ci
-      - name: Semgrep Summary
-        run: bash .github/scripts/semgrep-summary.sh
-      - name: Generate Semgrep SARIF
-        run: bash .github/scripts/semgrep-sarif.sh
-      - name: Upload Semgrep SARIF to Code Scanning
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: semgrep.sarif
-      - name: Fallback if Semgrep SARIF upload blocked
-        if: always()
-        run: echo "(Info) If 'Resource not accessible' occurred, Semgrep SARIF still stored as artifact; skipping code scanning ingestion."
-      - name: Upload Semgrep SARIF Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-sarif
-          path: semgrep.sarif
+    package-backend:
+      name: Publish Backend Image
+      needs: [build]
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+      permissions:
+        contents: read
+        packages: write
+      steps:
+        - uses: actions/checkout@v4
+        - name: Login GHCR
+          run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        - name: Build & Push
+          env:
+            IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/poc-task-manager-backend
+          run: |
+            TAG=$(echo "$GITHUB_REF_NAME" | tr '/' '-')
+            docker build -t $IMAGE_NAME:$TAG backend
+            docker push $IMAGE_NAME:$TAG
 
-  package-backend:
-    name: Build & Publish Backend Image (GHCR)
-    runs-on: ubuntu-latest
-    needs: [build-backend]
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Build & Push Image
-        env:
-          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/poc-task-manager-backend
-        run: |
-          TAG=$(echo "$GITHUB_REF_NAME" | tr '/' '-')
-          docker build -t $IMAGE_NAME:$TAG backend
-          docker push $IMAGE_NAME:$TAG
-          echo "Image pushed: $IMAGE_NAME:$TAG"
+    deploy-qa:
+      name: Deploy QA (Demo)
+      needs: [build, coverage-gate, codeql, security, sonar]
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/develop'
+      environment:
+        name: QA
+        url: https://example-qa.invalid
+      steps:
+        - name: Simulated QA Deploy
+          run: echo "(Demo) Deploying to QA environment..."
 
-  deploy-qa:
-    name: Deploy QA (Demo)
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, coverage-gate, codeql, semgrep, sonar]
-    if: github.ref == 'refs/heads/develop'
-    environment:
-      name: QA
-      url: https://example-qa.invalid
-    steps:
-      - name: Simulated QA Deploy
-        run: |
-          echo "(Demo) Deploying to QA environment..."
-          echo "This is a placeholder deploy step for gating demonstration." 
+    deploy-prd:
+      name: Deploy PRD (Demo)
+      needs: [build, coverage-gate, codeql, security, sonar]
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/master'
+      environment:
+        name: PRD
+        url: https://example-prod.invalid
+      steps:
+        - name: Simulated Production Deploy
+          run: echo "(Demo) Deploying to Production environment..."
 
-  deploy-prd:
-    name: Deploy Production (Demo)
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, coverage-gate, codeql, semgrep, sonar]
-    if: github.ref == 'refs/heads/master'
-    environment:
-      name: PRD
-      url: https://example-prod.invalid
-    steps:
-      - name: Simulated Production Deploy
-        run: |
-          echo "(Demo) Deploying to Production environment..."
-          echo "This is a placeholder deploy step for gating demonstration." 
-  finalize:
-    name: Finalize Summary
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-backend, test-frontend, coverage-gate, build-backend, build-frontend, codeql, sonar, diff-coverage, sbom, semgrep, secrets-licenses]
-    if: always()
-    permissions:
-      contents: write
-      security-events: read
-    steps:
-      - name: Summary
-        env:
-          LINT_RESULT: ${{ needs.lint.result }}
-          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
-          BACKEND_TEST_RESULT: ${{ needs['test-backend'].result }}
-          FRONTEND_TEST_RESULT: ${{ needs['test-frontend'].result }}
-          COVERAGE_RESULT: ${{ needs['coverage-gate'].result }}
-          COVERAGE_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
-          COVERAGE_GATE: ${{ needs['coverage-gate'].outputs.coverage_gate }}
-          BUILD_BACKEND_RESULT: ${{ needs['build-backend'].result }}
-          BUILD_FRONTEND_RESULT: ${{ needs['build-frontend'].result }}
-          CODEQL_RESULT: ${{ needs.codeql.result }}
-          SONAR_RESULT: ${{ needs.sonar.result }}
-          DIFF_RESULT: ${{ needs['diff-coverage'].result }}
-          DIFF_PCT: ${{ needs['diff-coverage'].outputs.diff_pct }}
-          SBOM_RESULT: ${{ needs.sbom.result }}
-        run: bash .github/scripts/final-summary.sh
-      - name: Checkout (for badges)
-        if: github.event_name == 'push'
-        uses: actions/checkout@v4
-      - name: Download Artifacts (batched)
-        if: github.event_name == 'push'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/download-artifacts.sh
-      - name: Aggregate Coverage HTML
-        if: github.event_name == 'push'
-        run: bash .github/scripts/coverage-html.sh
-      - name: Upload Aggregated Coverage HTML Artifact
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-html
-          path: coverage-html
-      - name: Publish Coverage HTML to gh-pages
-        if: github.event_name == 'push'
-        run: bash .github/scripts/publish-gh-pages.sh
-      - name: Handle Missing License Signals Artifact (optional)
-        if: github.event_name == 'push'
-        run: |
-          if [ ! -f license-artifact/license-signals.json ]; then
-            echo "(Info) license-signals artifact ausente - seguindo sem penalidades de licença.";
-          else
-            echo "License signals artifact presente.";
-          fi
-      - name: Collect Security Signals (severity & aging)
-        if: github.event_name == 'push'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/security-signals.sh
-      - name: Publish Badges (push events only)
-        if: github.event_name == 'push'
-        run: |
-          export SONAR_BLOCKER="${{ needs.sonar.outputs.sonar_blocker || '0' }}"
-          export SONAR_CRITICAL="${{ needs.sonar.outputs.sonar_critical || '0' }}"
-            export SONAR_MAJOR="${{ needs.sonar.outputs.sonar_major || '0' }}"
-          export SONAR_MINOR="${{ needs.sonar.outputs.sonar_minor || '0' }}"
-          export COV_AVG="${{ needs['coverage-gate'].outputs.coverage_avg }}"
-          export COV_GATE="${{ needs['coverage-gate'].outputs.coverage_gate }}"
-          export DIFF_PCT="${{ needs['diff-coverage'].outputs.diff_pct }}"
-          export CODEQL_RESULT="${{ needs.codeql.result }}"
-          export SONAR_RESULT="${{ needs.sonar.result }}"
-          export SEMGREP_RESULT="${{ needs.semgrep.result }}"
-          bash .github/scripts/badges.sh
-      - name: PR Coverage Delta Comment
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          CURRENT_AVG: ${{ needs['coverage-gate'].outputs.coverage_avg }}
-          GATE_STATUS: ${{ needs['coverage-gate'].outputs.coverage_gate }}
-          REPO_FULL: ${{ github.repository }}
-          DIFF_PCT: ${{ needs['diff-coverage'].outputs.diff_pct }}
-          DIFF_PASS: ${{ needs['diff-coverage'].outputs.diff_pass }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          node .github/scripts/pr-coverage-comment.js
-          BODY=$(cat pr-comment-body.txt)
-          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-            -f body="$BODY" || echo "(non-blocking) failed to post comment"
-  update-readme-badges:
-    name: Update README badges section (Orchestrator parity)
-    runs-on: ubuntu-latest
-    needs: [finalize]
-    if: always() && github.event_name == 'push'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-      - name: Update README badge block
-        env:
-          HEAD_BRANCH: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: bash .github/scripts/update-readme-badges.sh
-      - name: Push README update
-        if: success()
-        run: |
-          git push origin HEAD:${GITHUB_REF_NAME:-${GITHUB_REF_NAME}} || echo "Push skipped"
+    finalize:
+      name: Finalize
+      needs: [lint, quality, tests, coverage-gate, build, codeql, sonar, diff-coverage, security]
+      runs-on: ubuntu-latest
+      if: always()
+      permissions:
+        contents: write
+        security-events: read
+      steps:
+        - uses: actions/checkout@v4
+        - name: Finalize All
+          env:
+            GITHUB_EVENT_NAME: ${{ github.event_name }}
+            GITHUB_REF_NAME: ${{ github.ref_name }}
+            PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+            SONAR_BLOCKER: ${{ needs.sonar.outputs.sonar_blocker || '0' }}
+            SONAR_CRITICAL: ${{ needs.sonar.outputs.sonar_critical || '0' }}
+            SONAR_MAJOR: ${{ needs.sonar.outputs.sonar_major || '0' }}
+            SONAR_MINOR: ${{ needs.sonar.outputs.sonar_minor || '0' }}
+            COV_AVG: ${{ needs.coverage-gate.outputs.coverage_avg }}
+            COV_GATE: ${{ needs.coverage-gate.outputs.coverage_gate }}
+            DIFF_PCT: ${{ needs.diff-coverage.outputs.diff_pct }}
+            CODEQL_RESULT: ${{ needs.codeql.result }}
+            SONAR_RESULT: ${{ needs.sonar.result }}
+            SEMGREP_RESULT: ${{ needs.security.result }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: bash .github/scripts/finalize-all.sh
+
+    update-readme-badges:
+      name: Update README Badges
+      needs: [finalize]
+      runs-on: ubuntu-latest
+      if: always() && github.event_name == 'push'
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            ref: ${{ github.sha }}
+        - name: Update README badge block
+          env:
+            HEAD_BRANCH: ${{ github.ref_name }}
+            REPO: ${{ github.repository }}
+          run: bash .github/scripts/update-readme-badges.sh
+        - name: Push README update
+          if: success()
+          run: git push origin HEAD:${GITHUB_REF_NAME:-${GITHUB_REF_NAME}} || echo "Push skipped"
