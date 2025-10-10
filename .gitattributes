@@ -1,0 +1,4 @@
+# Force GitHub to treat workflow as text, avoid binary heuristic
+*.yml text eol=lf
+*.yaml text eol=lf
+.github/workflows/orchestrator.yml text diff
