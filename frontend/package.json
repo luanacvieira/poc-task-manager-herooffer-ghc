@@ -8,7 +8,7 @@
     "@testing-library/react": "13.4.0",
     "@testing-library/user-event": "14.6.1",
     "@types/jest": "29.5.12",
-    "@types/node": "18.19.50",
+    "@types/node": "24.7.1",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
     "ajv-formats": "2.1.1",
