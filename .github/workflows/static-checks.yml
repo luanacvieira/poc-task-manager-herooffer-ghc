@@ -24,8 +24,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          # Only reference dependency lockfiles that actually exist.
-          # Using non-existent paths causes: "Some specified paths were not resolved" and breaks caching.
+          # Only reference existing lockfile. Referencing non-existent paths breaks cache resolution.
           cache-dependency-path: package-lock.json
       - name: Install root + workspaces (peer-safe)
         run: |
@@ -47,7 +46,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          # Frontend has no standalone package-lock.json (monorepo root lockfile only)
+          # Frontend depends on root workspace lockfile
           cache-dependency-path: package-lock.json
       - name: Install frontend deps
         working-directory: frontend
