@@ -164,12 +164,12 @@ jobs:
           with:
             node-version: ${{ env.NODE_VERSION }}
         - name: Init
-          uses: github/codeql-action/init@v3
+          uses: github/codeql-action/init@v4
           with:
             languages: javascript
             build-mode: none
         - name: Analyze
-          uses: github/codeql-action/analyze@v3
+          uses: github/codeql-action/analyze@v4
           with:
             category: '/language:javascript'
         - run: ls -R ./codeql* || true
@@ -194,7 +194,7 @@ jobs:
         - name: Upload Gitleaks SARIF
           if: always()
           continue-on-error: true
-          uses: github/codeql-action/upload-sarif@v3
+          uses: github/codeql-action/upload-sarif@v4
           with:
             sarif_file: gitleaks.sarif
         - uses: actions/upload-artifact@v4
@@ -218,7 +218,7 @@ jobs:
           run: bash .github/scripts/semgrep-sarif.sh
         - name: Upload Semgrep SARIF
           continue-on-error: true
-          uses: github/codeql-action/upload-sarif@v3
+          uses: github/codeql-action/upload-sarif@v4
           with:
             sarif_file: semgrep.sarif
         - uses: actions/upload-artifact@v4

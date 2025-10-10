@@ -43,14 +43,14 @@ jobs:
           COUNT=$(find . -name '*.js' -o -name '*.ts' | wc -l); echo "Total JS/TS files: $COUNT"; if [ "$COUNT" -eq 0 ]; then echo "::warning::Nenhum arquivo JS/TS encontrado no checkout"; fi
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript
           build-mode: none
           queries: security-extended,security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:javascript"
           upload: true
