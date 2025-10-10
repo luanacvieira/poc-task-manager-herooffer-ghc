@@ -441,61 +441,11 @@ jobs:
       - name: Checkout (for badges)
         if: github.event_name == 'push'
         uses: actions/checkout@v4
-      - name: Download Combined Coverage Artifact
+      - name: Download Artifacts (batched)
         if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: combined-coverage
-          path: combined-coverage
-      - name: Download Backend Coverage Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend-coverage-artifact
-      - name: Download Frontend Coverage Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend-coverage-artifact
-      - name: Download Diff Coverage Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: diff-coverage
-          path: diff-coverage
-      - name: Download Semgrep SARIF Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: semgrep-sarif
-          path: semgrep-artifact
-      - name: Download Gitleaks SARIF Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: gitleaks-sarif
-          path: gitleaks-artifact
-      - name: Download Secret Signals Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: secret-signals
-          path: secret-artifact
-      - name: Download SBOM Artifact
-        if: github.event_name == 'push'
-        uses: actions/download-artifact@v4
-        with:
-          name: sbom
-          path: sbom-artifact
-      - name: Download License Signals Artifact
-        if: github.event_name == 'push'
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: license-signals
-          path: license-artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/download-artifacts.sh
       - name: Aggregate Coverage HTML
         if: github.event_name == 'push'
         run: bash .github/scripts/coverage-html.sh
