@@ -1,7 +1,0 @@
-name: Orchestrator Pipeline Restored Test
-on: { workflow_dispatch: {} }
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "restore test"
