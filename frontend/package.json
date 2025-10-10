@@ -50,7 +50,7 @@
   "proxy": "http://localhost:3001",
   "devDependencies": {
     "ajv": "^8.17.1",
-    "ajv-keywords": "^3.5.2",
+    "ajv-keywords": "^5.1.0",
     "cross-env": "7.0.3",
     "jest": "27.5.1"
   },
