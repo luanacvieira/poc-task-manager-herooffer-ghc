@@ -51,7 +51,7 @@ jobs:
           cache: npm
       - name: Install frontend deps
         working-directory: frontend
-        run: bash ../../.github/scripts/install-frontend.sh
+        run: bash ../.github/scripts/install-frontend.sh
       - name: TypeScript Check
         working-directory: frontend
         run: npx tsc --noEmit
@@ -68,10 +68,10 @@ jobs:
           cache: npm
       - name: Install backend deps
         working-directory: backend
-        run: bash ../../.github/scripts/install-backend.sh
+        run: bash ../.github/scripts/install-backend.sh
       - name: Run Backend Tests
         working-directory: backend
-        run: bash ../../.github/scripts/backend-tests.sh
+        run: bash ../.github/scripts/backend-tests.sh
       - name: Upload Backend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -96,7 +96,7 @@ jobs:
         working-directory: frontend
         env:
           CI: true
-        run: bash ./.github/scripts/frontend-tests.sh
+        run: bash ../.github/scripts/frontend-tests.sh
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -141,7 +141,7 @@ jobs:
           (npm ci || npm install --legacy-peer-deps)
       - name: Backend smoke
         working-directory: backend
-        run: bash ../../.github/scripts/build-backend.sh
+        run: bash ../.github/scripts/build-backend.sh
 
   build-frontend:
     name: Build Frontend
@@ -155,7 +155,7 @@ jobs:
           cache: npm
       - name: Install frontend deps
         working-directory: frontend
-        run: bash ../../.github/scripts/build-frontend.sh
+        run: bash ../.github/scripts/build-frontend.sh
 
   codeql:
     name: CodeQL Analyze
