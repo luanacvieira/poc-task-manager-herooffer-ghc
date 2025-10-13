@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ master, develop ]
-  pull_request:
-    branches: [ master, develop ]
+#  pull_request:
+#    branches: [ master, develop ]
 
 permissions:
   contents: write
