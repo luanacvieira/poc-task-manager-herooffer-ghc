@@ -16,7 +16,7 @@ jobs:
   deploy-qa:
     name: Deploy to QA
     runs-on: ubuntu-latest
-    environment: qa
+    environment: QA
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to QA Environment
@@ -35,6 +35,7 @@ jobs:
     name: Deploy to Production
     needs: [deploy-qa]
     runs-on: ubuntu-latest
+    environment: PRD
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

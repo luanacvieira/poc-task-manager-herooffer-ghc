@@ -23,6 +23,7 @@ jobs:
   generate-dashboard:
     name: Consolidar Métricas & Gerar Dashboard
     runs-on: ubuntu-latest
+    environment: github-pages
     steps:
       - name: Checkout código (branch atual)
         uses: actions/checkout@v4
