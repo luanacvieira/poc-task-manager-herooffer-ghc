@@ -6,8 +6,8 @@ on:
     types: [completed]
   # Permitir build direto (debug) ou em PR (master/develop) para inspecionar artefatos
   workflow_dispatch:
-  pull_request:
-    branches: [ master, develop ]
+#  pull_request:
+#    branches: [ master, develop ]
 
 permissions:
   contents: write

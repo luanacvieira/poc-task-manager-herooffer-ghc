@@ -3,8 +3,8 @@ name: Static Checks
 on:
   # Mantém execução manual e acrescenta gatilhos de validação direta em PRs principais
   workflow_dispatch:
-  pull_request:
-    branches: [ master, develop ]
+#  pull_request:
+#    branches: [ master, develop ]
   push:
     branches: [ master, develop ]
 
