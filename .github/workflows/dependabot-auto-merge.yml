@@ -1,8 +1,8 @@
 name: Auto-merge Dependabot minor/patch
 
 on:
-  pull_request:
-    types: [opened, labeled, synchronize]
+#  pull_request:
+#    types: [opened, labeled, synchronize]
   workflow_dispatch:
 
 permissions:
