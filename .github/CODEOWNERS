@@ -1,5 +1,0 @@
-# CODEOWNERS enforces automatic reviewer assignment
-# Pattern order matters.
-/backend/ @luanacvieira
-/frontend/ @luanacvieira
-/.github/ @luanacvieira
