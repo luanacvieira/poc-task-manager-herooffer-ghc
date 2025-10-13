@@ -1,0 +1,52 @@
+name: Build Workflow
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "Application version from build"
+        value: ${{ jobs.build-backend.outputs.version }}
+
+jobs:
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+      - name: Install
+        run: cd backend && (npm ci || npm install --legacy-peer-deps)
+      - name: Build
+        run: cd backend && npm run build
+      - name: Version
+        id: version
+        run: cd backend && echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+      - name: Install
+        run: cd frontend && (npm ci || npm install --legacy-peer-deps)
+      - name: Build
+        env:
+          CI: false
+        run: cd frontend && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build

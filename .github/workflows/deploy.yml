@@ -1,0 +1,51 @@
+name: Deploy Workflow
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+      version:
+        description: 'Application version'
+        required: true
+        type: string
+
+jobs:
+  deploy-qa:
+    name: Deploy to QA
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to QA Environment
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "=== DEPLOYING TO QA ==="
+          echo "Image: $IMAGE_TAG"
+          echo "Version: $VERSION"
+          echo "Simulating QA deployment..."
+          sleep 5
+          echo "QA deployment completed successfully"
+
+  deploy-prd:
+    name: Deploy to Production
+    needs: [deploy-qa]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Production Environment
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "=== DEPLOYING TO PRODUCTION ==="
+          echo "Image: $IMAGE_TAG"
+          echo "Version: $VERSION"
+          echo "Simulating production deployment..."
+          sleep 10
+          echo "Production deployment completed successfully"

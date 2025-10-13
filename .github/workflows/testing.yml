@@ -1,0 +1,96 @@
+name: Testing & Coverage Workflow
+
+on:
+  workflow_call:
+    outputs:
+      coverage_avg:
+        description: "Average coverage percentage"
+        value: ${{ jobs.coverage-gate.outputs.coverage_avg }}
+      coverage_gate:
+        description: "Coverage gate result"
+        value: ${{ jobs.coverage-gate.outputs.coverage_gate }}
+      diff_pct:
+        description: "Diff coverage percentage"
+        value: ${{ jobs.diff-coverage.outputs.diff_pct }}
+      diff_pass:
+        description: "Diff coverage gate result"
+        value: ${{ jobs.diff-coverage.outputs.diff_pass }}
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+      - name: Install
+        run: |
+          if [ "${{ matrix.target }}" = backend ]; then (cd backend && (npm ci || npm install --legacy-peer-deps)); else (cd frontend && (npm ci || npm install --legacy-peer-deps)); fi
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.target }}" = backend ]; then (cd backend && bash ../.github/scripts/backend-tests.sh); else (cd frontend && CI=true bash ../.github/scripts/frontend-tests.sh); fi
+      - name: Upload Coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-coverage
+          path: ${{ matrix.target == 'backend' && 'backend/coverage-unit' || 'frontend/coverage' }}/
+
+  coverage-gate:
+    name: Coverage Gate
+    needs: [tests]
+    runs-on: ubuntu-latest
+    outputs:
+      coverage_avg: ${{ steps.combine.outputs.avg }}
+      coverage_gate: ${{ steps.combine.outputs.gate }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-artifacts
+      - name: Combine & Enforce
+        id: combine
+        run: bash .github/scripts/coverage-gate.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-coverage
+          path: combined-coverage
+
+  diff-coverage:
+    name: Diff Coverage
+    needs: [tests]
+    runs-on: ubuntu-latest
+    outputs:
+      diff_pct: ${{ steps.diffcalc.outputs.pct }}
+      diff_pass: ${{ steps.diffcalc.outputs.pass }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed Files
+        id: changed
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash .github/scripts/changed-files.sh
+      - uses: actions/download-artifact@v4
+        with:
+          path: diff-cov-artifacts
+      - name: Compute Diff Coverage
+        id: diffcalc
+        env:
+          CHANGED_LIST: ${{ steps.changed.outputs.list }}
+          DIFF_THRESHOLD: 80
+          ARTIFACT_ROOT: diff-cov-artifacts
+        run: bash .github/scripts/diff-coverage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diff-coverage
+          path: diff-coverage
