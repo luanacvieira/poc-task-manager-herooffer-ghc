@@ -1,0 +1,13 @@
+name: Test Orchestrator
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-call:
+    name: Test Workflow Call
+    uses: ./.github/workflows/code-quality.yml
+    secrets: inherit
