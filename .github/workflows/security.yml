@@ -1,0 +1,92 @@
+name: Security Analysis Workflow
+
+on:
+  workflow_call:
+    outputs:
+      codeql_status:
+        description: "CodeQL security analysis status"
+        value: ${{ jobs.codeql.outputs.status }}
+      security_status:
+        description: "Security scan overall status"  
+        value: ${{ jobs.security.outputs.status }}
+
+jobs:
+  codeql:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript-typescript' ]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+      - name: Set Result
+        id: result
+        run: echo "status=success" >> $GITHUB_OUTPUT
+
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: ./sbom.spdx.json
+      - name: Gitleaks Security Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE}}
+      - name: License Scan
+        run: |
+          echo "=== LICENSE SCAN ===" > license-scan.log
+          find . -name "LICENSE*" -o -name "license*" -o -name "COPYING*" | head -20 >> license-scan.log || true
+          echo "=== NPM LICENSE CHECK ===" >> license-scan.log
+          if [ -f backend/package.json ]; then (cd backend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
+          if [ -f frontend/package.json ]; then (cd frontend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
+      - name: Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/ci
+            p/r2c-ci
+            p/docker
+            p/javascript
+            p/typescript
+            p/react
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-artifacts
+          path: |
+            sbom.spdx.json
+            license-scan.log
+      - name: Set Result
+        id: result
+        run: echo "status=success" >> $GITHUB_OUTPUT

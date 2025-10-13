@@ -1,0 +1,37 @@
+name: SonarCloud Analysis Workflow
+
+on:
+  workflow_call:
+    outputs:
+      sonar_status:
+        description: "SonarCloud analysis status"
+        value: ${{ jobs.sonar.outputs.status }}
+
+jobs:
+  sonar:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: sonar-coverage
+      - name: Prepare coverage files
+        run: |
+          mkdir -p sonar-reports
+          find sonar-coverage -name "lcov.info" -exec cp {} sonar-reports/ \; 2>/dev/null || true
+          find sonar-coverage -name "coverage-final.json" -exec cp {} sonar-reports/ \; 2>/dev/null || true
+          ls -la sonar-reports/ || true
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Set Result
+        id: result
+        run: echo "status=success" >> $GITHUB_OUTPUT
