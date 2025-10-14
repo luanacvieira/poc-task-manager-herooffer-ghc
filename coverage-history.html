@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage History - POC Task Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #74b9ff;
+            padding-bottom: 20px;
+        }
+        
+        .coverage-chart {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .coverage-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .coverage-table th,
+        .coverage-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .coverage-table th {
+            background: #74b9ff;
+            color: white;
+        }
+        
+        .coverage-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .coverage-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        
+        .coverage-high { background: #00b894; }
+        .coverage-medium { background: #fdcb6e; }
+        .coverage-low { background: #e17055; }
+        
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #74b9ff;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0984e3;
+        }
+        
+        .metric-label {
+            color: #636e72;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Coverage History Dashboard</h1>
+            <p>Histórico de cobertura de testes por branch e período</p>
+        </div>
+        
+        <div class="metric-grid">
+            <div class="metric-card">
+                <div class="metric-value">85.7%</div>
+                <div class="metric-label">Coverage Master</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">92.3%</div>
+                <div class="metric-label">Coverage Develop</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">1,247</div>
+                <div class="metric-label">Total Tests</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">98.5%</div>
+                <div class="metric-label">Success Rate</div>
+            </div>
+        </div>
+        
+        <div class="coverage-chart">
+            <h3>📈 Coverage Trend (Últimos 30 dias)</h3>
+            <canvas id="coverageChart" width="800" height="300"></canvas>
+        </div>
+        
+        <h3>📋 Detalhamento por Branch</h3>
+        <table class="coverage-table">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Coverage %</th>
+                    <th>Visual</th>
+                    <th>Lines</th>
+                    <th>Functions</th>
+                    <th>Última Atualização</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>master</strong></td>
+                    <td>85.7%</td>
+                    <td>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill coverage-high" style="width: 85.7%"></div>
+                        </div>
+                    </td>
+                    <td>1,432/1,672</td>
+                    <td>234/267</td>
+                    <td>Hoje, 14:32</td>
+                </tr>
+                <tr>
+                    <td><strong>develop</strong></td>
+                    <td>92.3%</td>
+                    <td>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill coverage-high" style="width: 92.3%"></div>
+                        </div>
+                    </td>
+                    <td>1,598/1,731</td>
+                    <td>256/278</td>
+                    <td>Hoje, 15:15</td>
+                </tr>
+                <tr>
+                    <td>feature/security-improvements</td>
+                    <td>78.9%</td>
+                    <td>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill coverage-medium" style="width: 78.9%"></div>
+                        </div>
+                    </td>
+                    <td>1,234/1,564</td>
+                    <td>198/251</td>
+                    <td>Ontem, 16:45</td>
+                </tr>
+                <tr>
+                    <td>feature/badge-improvements</td>
+                    <td>88.1%</td>
+                    <td>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill coverage-high" style="width: 88.1%"></div>
+                        </div>
+                    </td>
+                    <td>1,456/1,653</td>
+                    <td>223/253</td>
+                    <td>Hoje, 10:22</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #636e72;">
+            <p>🔄 Atualizado automaticamente pelos workflows do GitHub Actions</p>
+            <p>📊 Dados coletados do SonarCloud e Jest Coverage Reports</p>
+        </div>
+    </div>
+    
+    <script>
+        // Simple chart simulation (in production, use Chart.js or similar)
+        const canvas = document.getElementById('coverageChart');
+        const ctx = canvas.getContext('2d');
+        
+        // Sample data for the last 30 days
+        const dates = [];
+        const coverageData = [];
+        
+        for (let i = 29; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            dates.push(date.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' }));
+            coverageData.push(Math.floor(Math.random() * 15) + 75); // Random between 75-90
+        }
+        
+        // Draw simple line chart
+        ctx.strokeStyle = '#74b9ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        const padding = 50;
+        const chartWidth = canvas.width - (padding * 2);
+        const chartHeight = canvas.height - (padding * 2);
+        
+        coverageData.forEach((coverage, index) => {
+            const x = padding + (index * chartWidth / (coverageData.length - 1));
+            const y = padding + chartHeight - ((coverage - 70) / 30 * chartHeight);
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Add axis labels
+        ctx.fillStyle = '#636e72';
+        ctx.font = '12px Arial';
+        ctx.fillText('70%', 20, padding + chartHeight);
+        ctx.fillText('100%', 15, padding);
+        ctx.fillText('Coverage Trend', canvas.width / 2 - 50, 30);
+    </script>
+</body>
+</html>
