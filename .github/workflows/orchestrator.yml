@@ -1,7 +1,7 @@
 name: Orchestrator Pipeline
 on:
   push:
-    branches: [ master, develop, feature/*, feature/**, release/* ]
+    branches: [ master, develop, feature/*, feature/**, release/*, test-* ]
   pull_request:
     branches: [ master, develop ]
   workflow_dispatch:
