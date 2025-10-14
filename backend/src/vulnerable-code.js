@@ -1,5 +1,7 @@
 // VULNERABILIDADES PROPOSITAIS PARA CODEQL DETECTAR
 
+//vulnerabilidades propositais para CodeQL
+/*
 // ❌ CodeQL: Path traversal vulnerability
 const fs = require('fs');
 const path = require('path');
@@ -48,4 +50,5 @@ module.exports = {
     API_SECRET,
     JWT_KEY,
     DB_CONN
-};
+}
+*/;
