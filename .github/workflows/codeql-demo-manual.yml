@@ -1,0 +1,184 @@
+name: CodeQL Security Demo - Manual Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: true
+        default: 'codeql-only'
+        type: choice
+        options:
+        - 'codeql-only'
+        - 'full-security'
+        - 'gitleaks-only'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  codeql-demo:
+    name: CodeQL Security Analysis (Manual Demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: ${{ github.event.inputs.scan_type == 'codeql-only' || github.event.inputs.scan_type == 'full-security' }}
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript-typescript' ]
+    steps:
+      - name: 📋 Demo Info
+        run: |
+          echo "🎯 DEMONSTRAÇÃO CODEQL MANUAL"
+          echo "🔍 Tipo de scan: ${{ github.event.inputs.scan_type }}"
+          echo "📊 Linguagem: ${{ matrix.language }}"
+          echo "⚠️  Vulnerabilidades esperadas:"
+          echo "   - XSS via innerHTML/document.write"
+          echo "   - Code Injection via eval()/Function()"
+          echo "   - Prototype Pollution"
+          echo "   - Hardcoded Secrets"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: 🔍 Mostrar arquivos com vulnerabilidades
+        run: |
+          echo "📁 ARQUIVOS COM VULNERABILIDADES PROPOSITAIS:"
+          echo "1️⃣ TaskForm.tsx (hardcoded secret):"
+          grep -n "API_SECRET_KEY" frontend/src/components/TaskForm.tsx || true
+          echo ""
+          echo "2️⃣ security-test.js (múltiplas vulnerabilidades):"
+          if [ -f frontend/src/security-test.js ]; then
+            echo "✅ Arquivo encontrado - vulnerabilidades incluem:"
+            grep -n "eval\|innerHTML\|document.write\|Function" frontend/src/security-test.js | head -10
+          else
+            echo "❌ Arquivo security-test.js não encontrado"
+          fi
+          
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: +security-extended,security-and-quality
+          
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          upload: true
+          
+      - name: 🚨 Check for Vulnerabilities
+        id: vulnerability_check
+        run: |
+          echo "🔍 VERIFICANDO VULNERABILIDADES DETECTADAS..."
+          
+          # Verificar se temos os arquivos com vulnerabilidades
+          VULN_COUNT=0
+          
+          if [ -f frontend/src/security-test.js ]; then
+            echo "✅ security-test.js encontrado - vulnerabilidades presentes:"
+            if grep -q "eval(" frontend/src/security-test.js; then
+              echo "  🚨 Code Injection (eval) detectado"
+              VULN_COUNT=$((VULN_COUNT + 1))
+            fi
+            if grep -q "innerHTML" frontend/src/security-test.js; then
+              echo "  🚨 XSS (innerHTML) detectado"  
+              VULN_COUNT=$((VULN_COUNT + 1))
+            fi
+            if grep -q "document.write" frontend/src/security-test.js; then
+              echo "  🚨 XSS (document.write) detectado"
+              VULN_COUNT=$((VULN_COUNT + 1))
+            fi
+            if grep -q "new Function" frontend/src/security-test.js; then
+              echo "  🚨 Code Injection (Function constructor) detectado"
+              VULN_COUNT=$((VULN_COUNT + 1))
+            fi
+          fi
+          
+          if grep -q "sk-live-" frontend/src/components/TaskForm.tsx; then
+            echo "  🚨 Hardcoded Secret detectado"
+            VULN_COUNT=$((VULN_COUNT + 1))
+          fi
+          
+          echo "📊 Total de padrões vulneráveis encontrados: $VULN_COUNT"
+          
+          if [ $VULN_COUNT -gt 0 ]; then
+            echo "🚨 FALHA DE SEGURANÇA DEMONSTRADA!"
+            echo "CodeQL deve ter detectado $VULN_COUNT tipos de vulnerabilidades."
+            echo "Verifique a aba Security → Code scanning para detalhes."
+            exit 1
+          else
+            echo "✅ Nenhuma vulnerabilidade encontrada nos arquivos de teste"
+          fi
+
+  gitleaks-demo:
+    name: Gitleaks Secret Detection (Manual Demo)  
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.scan_type == 'gitleaks-only' || github.event.inputs.scan_type == 'full-security' }}
+    steps:
+      - name: 📋 Demo Info
+        run: |
+          echo "🔐 DEMONSTRAÇÃO GITLEAKS MANUAL"
+          echo "🔍 Procurando por secrets hardcoded no código"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Mostrar secrets esperados
+        run: |
+          echo "🔐 SECRETS PROPOSITAIS PARA DEMONSTRAÇÃO:"
+          echo "1️⃣ API Secret Key em TaskForm.tsx:"
+          grep -n "API_SECRET_KEY.*sk-live-" frontend/src/components/TaskForm.tsx || true
+
+      - name: Gitleaks Security Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE}}
+
+  demo-summary:
+    name: 📊 Demo Summary
+    runs-on: ubuntu-latest
+    needs: [codeql-demo, gitleaks-demo]
+    if: always()
+    steps:
+      - name: 📋 Resumo da Demonstração
+        run: |
+          echo "🎯 RESUMO DA DEMONSTRAÇÃO DE SEGURANÇA"
+          echo "======================================"
+          echo "Tipo de scan: ${{ github.event.inputs.scan_type }}"
+          echo ""
+          echo "📊 RESULTADOS:"
+          
+          if [[ "${{ needs.codeql-demo.result }}" == "failure" ]]; then
+            echo "❌ CodeQL: VULNERABILIDADES DETECTADAS ✅ (demonstração funcionou)"
+          elif [[ "${{ needs.codeql-demo.result }}" == "success" ]]; then
+            echo "✅ CodeQL: Nenhuma vulnerabilidade detectada"
+          elif [[ "${{ needs.codeql-demo.result }}" == "skipped" ]]; then
+            echo "⏭️ CodeQL: Não executado (tipo de scan: ${{ github.event.inputs.scan_type }})"
+          fi
+          
+          if [[ "${{ needs.gitleaks-demo.result }}" == "failure" ]]; then
+            echo "❌ Gitleaks: SECRETS DETECTADOS ✅ (demonstração funcionou)"
+          elif [[ "${{ needs.gitleaks-demo.result }}" == "success" ]]; then
+            echo "✅ Gitleaks: Nenhum secret detectado"
+          elif [[ "${{ needs.gitleaks-demo.result }}" == "skipped" ]]; then
+            echo "⏭️ Gitleaks: Não executado (tipo de scan: ${{ github.event.inputs.scan_type }})"
+          fi
+          
+          echo ""
+          echo "🔍 Para ver detalhes das vulnerabilidades:"
+          echo "   • Security tab → Code scanning alerts"
+          echo "   • Security tab → Secret scanning alerts"

@@ -5,6 +5,21 @@ on:
   pull_request:
     branches: [ master, develop ]
   workflow_dispatch:
+    inputs:
+      run_security_only:
+        description: 'Run only security analysis (skip tests/build)'
+        required: false
+        default: false
+        type: boolean
+      security_level:
+        description: 'Security scan level'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+        - 'full'
+        - 'codeql-only' 
+        - 'secrets-only'
 
 permissions:
   actions: read
@@ -28,11 +43,13 @@ concurrency:
 jobs:
   code-quality:
     name: Code Quality
+    if: ${{ !inputs.run_security_only }}
     uses: ./.github/workflows/code-quality.yml
     secrets: inherit
 
   testing:
     name: Testing & Coverage
+    if: ${{ !inputs.run_security_only }}
     needs: [code-quality]
     uses: ./.github/workflows/testing.yml
     secrets: inherit
@@ -40,12 +57,20 @@ jobs:
   build:
     name: Build
     needs: [testing]
+    if: ${{ !inputs.run_security_only }}
     uses: ./.github/workflows/build.yml
     secrets: inherit
 
   security:
     name: Security Analysis
+    if: ${{ always() && (!github.event.inputs.run_security_only || github.event.inputs.run_security_only == 'false') }}
     needs: [build]
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+    
+  security-only:
+    name: Security Analysis (Manual)
+    if: ${{ github.event.inputs.run_security_only == 'true' }}
     uses: ./.github/workflows/security.yml
     secrets: inherit
 
