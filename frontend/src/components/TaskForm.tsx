@@ -20,48 +20,20 @@ if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
 TaskFormWithTypeError({ onTaskAdded: () => {} });
 */
 
-// TESTE PARA FALHAR CODEQL - vulnerabilidades de segurança propositais
-// Descomente o bloco abaixo para demonstrar detecção de vulnerabilidades pelo CodeQL:
+// ❌ VULNERABILIDADES PROPOSITAIS PARA CODEQL DETECTAR ❌
 
-// ❌ CodeQL: Hardcoded credentials (sempre detectável)
-const API_KEY = "sk-1234567890abcdef"; // CodeQL detecta hardcoded secrets
-const DB_PASSWORD = "admin123";
+// Hardcoded secrets - sempre detectáveis
+const PROD_PASSWORD = "admin123prod"; 
+const LIVE_API_KEY = "ak-47892138471928347192834";
 
-// ❌ CodeQL: Code injection via eval() - função exportada (detectável)
-export const processUserCode = (code: string) => {
-    // Vulnerabilidade: eval com input do usuário
-    return eval(code);
-};
+// Code injection - eval direto
+eval('console.log("vulnerability test")'); // VULNERABILIDADE: eval()
 
-// ❌ CodeQL: XSS vulnerability - função que pode ser chamada  
-const updateContent = (htmlContent: string) => {
-    // Vulnerabilidade: innerHTML sem sanitização
-    const element = document.getElementById('dynamic-content');
-    if (element) {
-        element.innerHTML = htmlContent; // CodeQL detecta XSS
-    }
-};
-
-// ❌ CodeQL: SQL injection - template string com input
-const buildUserQuery = (userId: string) => {
-    // Vulnerabilidade: SQL injection via template literal
-    return `SELECT * FROM users WHERE id = '${userId}' AND active = 1`;
-};
-
-// Uso das funções vulneráveis em contexto real (não dead code)
-const vulnerabilityDemo = {
-    apiKey: API_KEY,
-    password: DB_PASSWORD,
-    executeCode: processUserCode,
-    setContent: updateContent,
-    queryUser: buildUserQuery
-};
-
-// Referência para evitar warning do ESLint  
-// eslint-disable-next-line no-constant-condition
-if (true) {
-    // Vulnerabilidades sempre ativas para CodeQL detectar
-    void vulnerabilityDemo;
+// XSS - innerHTML sem sanitização  
+if (typeof window !== 'undefined') {
+    const element = document.createElement('div');
+    element.innerHTML = '<img src=x onerror=alert(1)>'; // VULNERABILIDADE: XSS
+    console.log('Secrets loaded:', PROD_PASSWORD, LIVE_API_KEY);
 }
 //fim do teste faha codeql
 
