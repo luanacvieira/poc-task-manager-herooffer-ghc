@@ -58,7 +58,7 @@ jobs:
     needs: [build, security, analysis]
     uses: ./.github/workflows/package.yml
     secrets: inherit
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/betterrole-with-tests1-aux'
 
   deploy:
     name: Deploy
@@ -68,7 +68,7 @@ jobs:
       image_tag: ${{ github.sha }}
       version: ${{ github.ref_name }}-${{ github.sha }}
     secrets: inherit
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/betterrole-with-tests1-aux'
 
   finalize:
     name: Finalize & Report
