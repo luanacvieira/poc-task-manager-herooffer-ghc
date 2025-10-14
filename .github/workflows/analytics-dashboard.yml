@@ -25,6 +25,7 @@ jobs:
     name: Consolidar Métricas & Gerar Dashboard
     runs-on: ubuntu-latest
     environment: github-pages
+    if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
     steps:
       - name: Checkout código (branch atual)
         uses: actions/checkout@v4

@@ -63,14 +63,6 @@ jobs:
 
   security:
     name: Security Analysis
-    if: ${{ always() && (!github.event.inputs.run_security_only || github.event.inputs.run_security_only == 'false') }}
-    needs: [build]
-    uses: ./.github/workflows/security.yml
-    secrets: inherit
-    
-  security-only:
-    name: Security Analysis (Manual)
-    if: ${{ github.event.inputs.run_security_only == 'true' }}
     uses: ./.github/workflows/security.yml
     secrets: inherit
 
