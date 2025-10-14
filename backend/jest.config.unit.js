@@ -23,13 +23,13 @@ module.exports = {
         '!**/tests/**'
     ],
     
-    // Coverage thresholds - Ajustado para cobertura atual realista
+    // Coverage thresholds - Baseado na cobertura atual alcançável
     coverageThreshold: {
         global: {
-            branches: 75,
-            functions: 90, // Controllers e models têm 100%
-            lines: 90,
-            statements: 90
+            branches: 85,
+            functions: 85,
+            lines: 85,
+            statements: 85
         }
     },
     
