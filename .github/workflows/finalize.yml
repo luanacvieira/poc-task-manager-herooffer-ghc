@@ -114,9 +114,10 @@ jobs:
           
           # Global badges
           COVERAGE_COLOR="red"
-          if [ $(echo "${COVERAGE_AVG:-0} >= 90" | bc -l) -eq 1 ]; then COVERAGE_COLOR="brightgreen"
-          elif [ $(echo "${COVERAGE_AVG:-0} >= 80" | bc -l) -eq 1 ]; then COVERAGE_COLOR="green"  
-          elif [ $(echo "${COVERAGE_AVG:-0} >= 60" | bc -l) -eq 1 ]; then COVERAGE_COLOR="orange"
+          COVERAGE_NUM=$(echo "${COVERAGE_AVG:-0}" | cut -d'.' -f1)
+          if [ "$COVERAGE_NUM" -ge 90 ]; then COVERAGE_COLOR="brightgreen"
+          elif [ "$COVERAGE_NUM" -ge 80 ]; then COVERAGE_COLOR="green"  
+          elif [ "$COVERAGE_NUM" -ge 60 ]; then COVERAGE_COLOR="orange"
           fi
           
           echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE_AVG:-0}%\",\"color\":\"$COVERAGE_COLOR\"}" > badges/coverage-badge.json

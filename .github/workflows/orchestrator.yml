@@ -13,6 +13,8 @@ permissions:
   security-events: write
   issues: write
   pull-requests: write
+  pages: write
+  id-token: write
 
 env:
   NODE_VERSION: '20.x'
