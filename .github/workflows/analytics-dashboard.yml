@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 3 * * *'   # Diariamente 03:00 UTC
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [ master, develop ]
 #  pull_request:

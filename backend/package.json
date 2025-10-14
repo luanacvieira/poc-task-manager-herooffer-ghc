@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "start:dev": "node src/server-dev.js",
     "dev": "nodemon src/server.js",
+    "build": "echo Backend build completed - Node.js does not require compilation && node -e \"const fs=require('fs'); const path=require('path'); if(!fs.existsSync('dist')) fs.mkdirSync('dist'); const copy=(src,dest)=>{const stat=fs.statSync(src); if(stat.isDirectory()){if(!fs.existsSync(dest)) fs.mkdirSync(dest); fs.readdirSync(src).forEach(item=>copy(path.join(src,item),path.join(dest,item)));}else{fs.copyFileSync(src,dest);}}; copy('src','dist/src');\"",
     "test": "cross-env NODE_ENV=test jest --config=jest.config.unit.js --coverage --runInBand --verbose",
     "test:watch": "cross-env NODE_ENV=test jest --config=jest.config.unit.js --watch --coverage",
     "test:unit": "cross-env NODE_ENV=test jest --config=jest.config.unit.js",
