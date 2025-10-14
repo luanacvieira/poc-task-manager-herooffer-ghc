@@ -6,36 +6,29 @@ interface TaskFormProps {
     onTaskAdded: () => void;
 }
 
-// TESTE PARA FALHAR TYPECHECK - função com erro de tipo mas sem conflito de nome
-/*function TaskFormWithTypeError(props: TaskFormProps) {
+// ❌ TESTE PARA FALHAR TYPECHECK - descomente o bloco para ativar ❌
+/*
+function TaskFormWithTypeError(props: TaskFormProps) {
     // Erro proposital: chamando onTaskAdded com argumento inesperado
     props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
     return <div>Task Form</div>;
 }
 
-// eslint-disable-next-line no-constant-condition
-if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
-
-// 🎯 POC DEMO: Para ativar erro TypeScript, descomente a linha abaixo:
-TaskFormWithTypeError({ onTaskAdded: () => {} });
+// 🎯 POC DEMO TypeScript: descomente a linha abaixo para falhar typecheck:
+// TaskFormWithTypeError({ onTaskAdded: () => {} });
 */
 
-// ❌ VULNERABILIDADES PROPOSITAIS PARA CODEQL DETECTAR ❌
+// ❌ TESTE ESLINT - descomente para falhar ❌
+/*
+const unusedVar = "test"; // ❌ ESLint: variable not used
+console.log(undefinedVar); // ❌ ESLint: variable not defined
+*/
 
-// Hardcoded secrets - sempre detectáveis
-const PROD_PASSWORD = "admin123prod"; 
-const LIVE_API_KEY = "ak-47892138471928347192834";
+// ❌ SECURITY SCAN (Gitleaks) - FUNCIONA ✅ ❌
+const API_SECRET_KEY = "sk-live-abcd1234efgh5678ijkl9012"; // ✅ Gitleaks detecta
 
-// Code injection - eval direto
-eval('console.log("vulnerability test")'); // VULNERABILIDADE: eval()
-
-// XSS - innerHTML sem sanitização  
-if (typeof window !== 'undefined') {
-    const element = document.createElement('div');
-    element.innerHTML = '<img src=x onerror=alert(1)>'; // VULNERABILIDADE: XSS
-    console.log('Secrets loaded:', PROD_PASSWORD, LIVE_API_KEY);
-}
-//fim do teste faha codeql
+// Uso da variável para evitar ESLint warning
+console.debug('Security test loaded:', !!API_SECRET_KEY);
 
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({
