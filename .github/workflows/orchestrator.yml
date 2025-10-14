@@ -111,6 +111,8 @@ jobs:
       coverage_avg: ${{ needs.testing.outputs.coverage_avg }}
       diff_pct: ${{ needs.testing.outputs.diff_pct }}
       version: ${{ github.ref_name }}-${{ github.sha }}
+      codeql_status: ${{ needs.security.outputs.codeql_status }}
+      security_status: ${{ needs.security.outputs.security_status }}
     secrets: inherit
     if: always()
 

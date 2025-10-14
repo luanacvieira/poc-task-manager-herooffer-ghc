@@ -15,6 +15,16 @@ on:
         description: 'Application version'
         required: true
         type: string
+      codeql_status:
+        description: 'CodeQL security analysis status'
+        required: false
+        type: string
+        default: 'unknown'
+      security_status:
+        description: 'Security scans overall status'
+        required: false
+        type: string
+        default: 'unknown'
 
 jobs:
   finalize:
@@ -41,6 +51,8 @@ jobs:
           COVERAGE_AVG: ${{ inputs.coverage_avg }}
           DIFF_PCT: ${{ inputs.diff_pct }}
           VERSION: ${{ inputs.version }}
+          CODEQL_STATUS: ${{ inputs.codeql_status }}
+          SECURITY_STATUS: ${{ inputs.security_status }}
         run: |
           echo "=== PIPELINE SUMMARY ==="
           echo "✅ Code Quality: Passed"
@@ -48,7 +60,8 @@ jobs:
           echo "📊 Coverage: $COVERAGE_AVG%"
           echo "📈 Diff Coverage: $DIFF_PCT%"
           echo "🏗️ Build: Completed"
-          echo "🔒 Security: Scanned"
+          echo "� CodeQL: $CODEQL_STATUS"
+          echo "�🔒 Security Scans: $SECURITY_STATUS"
           echo "📦 Package: $VERSION"
           echo "🚀 Deploy: Completed"
           echo "========================"
@@ -64,7 +77,8 @@ jobs:
             echo "| 📊 Coverage | $([ -n "$COVERAGE_AVG" ] && echo "✅ $COVERAGE_AVG%" || echo "⚠️ N/A") | Combined backend + frontend coverage |"
             echo "| 📈 Diff Coverage | $([ -n "$DIFF_PCT" ] && echo "✅ $DIFF_PCT%" || echo "⚠️ N/A") | New code coverage |"
             echo "| 🏗️ Build | ✅ Completed | Application built successfully |"
-            echo "| 🔒 Security | ✅ Scanned | Security analysis completed |"
+            echo "| � CodeQL Analysis | $([ "$CODEQL_STATUS" = "success" ] && echo "✅ Passed" || [ "$CODEQL_STATUS" = "failure" ] && echo "❌ Vulnerabilities Found" || echo "⚠️ $CODEQL_STATUS") | Static security code analysis |"
+            echo "| 🔒 Security Scans | $([ "$SECURITY_STATUS" = "success" ] && echo "✅ Passed" || [ "$SECURITY_STATUS" = "failure" ] && echo "❌ Issues Found" || echo "⚠️ $SECURITY_STATUS") | Gitleaks + Semgrep + SBOM |"
             echo "| 📦 Package | ✅ Published | Version: $VERSION |"
             echo "| 🚀 Deploy | ✅ Completed | Application deployed |"
             echo ""
