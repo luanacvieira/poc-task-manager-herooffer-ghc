@@ -19,6 +19,7 @@ module.exports = {
         '!src/server.js', // bootstrap separado não testado em unit
         '!src/server-dev.js', // servidor de desenvolvimento
         '!src/mock-server.js', // mock server para testes manuais
+        '!src/vulnerable-code.js', // vulnerabilidades propositais para CodeQL (não testáveis)
         '!**/node_modules/**',
         '!**/tests/**'
     ],

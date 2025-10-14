@@ -20,39 +20,20 @@ if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
 TaskFormWithTypeError({ onTaskAdded: () => {} });
 */
 
-// TESTE PARA FALHAR CODEQL - vulnerabilidades de segurança propositais
-// Descomente o bloco abaixo para demonstrar detecção de vulnerabilidades pelo CodeQL:
+// ❌ VULNERABILIDADES PROPOSITAIS PARA CODEQL DETECTAR ❌
 
-const unsafeEval = (userInput: string) => {
-    // ❌ CodeQL: Code injection via eval()
-    return eval(userInput);
-};
+// Hardcoded secrets - sempre detectáveis
+const PROD_PASSWORD = "admin123prod"; 
+const LIVE_API_KEY = "ak-47892138471928347192834";
 
-const unsafeInnerHTML = (content: string) => {
-    // ❌ CodeQL: XSS via dangerouslySetInnerHTML  
-    document.getElementById('content')!.innerHTML = content;
-};
+// Code injection - eval direto
+eval('console.log("vulnerability test")'); // VULNERABILIDADE: eval()
 
-const unsafeSQLQuery = (userId: string) => {
-    // ❌ CodeQL: SQL injection vulnerability
-    const query = `SELECT * FROM users WHERE id = '${userId}'`;
-    return query;
-};
-
-const hardcodedSecret = () => {
-    // ❌ CodeQL: Hardcoded credentials
-    const apiKey = "sk-1234567890abcdef";
-    const password = "admin123";
-    return { apiKey, password };
-};
-
-// Usar as funções para que não sejam removidas pelo linter
-// eslint-disable-next-line no-constant-condition
-if (false) {
-    unsafeEval("alert('xss')");
-    unsafeInnerHTML("<script>alert('xss')</script>");
-    unsafeSQLQuery("1' OR '1'='1");
-    hardcodedSecret();
+// XSS - innerHTML sem sanitização  
+if (typeof window !== 'undefined') {
+    const element = document.createElement('div');
+    element.innerHTML = '<img src=x onerror=alert(1)>'; // VULNERABILIDADE: XSS
+    console.log('Secrets loaded:', PROD_PASSWORD, LIVE_API_KEY);
 }
 //fim do teste faha codeql
 
