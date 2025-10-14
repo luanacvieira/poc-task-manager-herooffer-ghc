@@ -1,21 +1,17 @@
 # poc-task-manager-herooffer-ghc
 
 <!-- BADGES-AUTO-START -->
-![Build (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/build-status-badge-master.json)
-![Coverage (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-master.json)
-![Coverage Gate (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-master.json)
-![Risk Score (master)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/risk-score-badge-master.json)
-<!-- pipeline trigger no-op: teste workflows modularizados -->
-![Sonar Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=alert_status)
-![Sonar Coverage](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=coverage)
-![Sonar Bugs](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=bugs)
-![Sonar Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=vulnerabilities)
-![Sonar Code Smells](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=code_smells)
-![Sonar Maintainability](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=sqale_rating)
-![Sonar Reliability](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=reliability_rating)
-![Sonar Security](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=security_rating)
-![Coverage (feature/betterrole-with-tests1)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-feature-betterrole-with-tests1.json)
-![Coverage Gate (feature/betterrole-with-tests1)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-feature-betterrole-with-tests1.json)
+![Build Status](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/build-status-badge-master.json)
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-master.json)
+![Coverage Gate](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-master.json)
+
+![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=alert_status)
+![Coverage](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=coverage)
+![Bugs](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=bugs)
+![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=vulnerabilities)
+![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=sqale_rating)
+![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=reliability_rating)
+![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=github_poc-task-manager-herooffer-ghc&metric=security_rating)
 <!-- BADGES-AUTO-END -->
 
 ## Status & Qualidade
@@ -139,10 +135,8 @@ Cor dinâmica: >=90 brightgreen, >=80 green, senão orange.
 5. **Histórico disponível:** `badges/history/coverage-history-<safeBranch>.json`
 6. **Se badges demoram:** adicionar `&cacheSeconds=60` na URL do Shields
 
-### Exemplos de URLs (master)
-Coverage: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-badge-master.json`
-Gate: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/coverage-gate-badge-master.json`
-Build: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/badges/build-status-badge-master.json`
+### Badge URLs
+Os badges são automaticamente gerados e atualizados pela pipeline na branch `badges`.
 
 ### Problemas comuns e soluções
 - **Badge "resource not found":** Workflow ainda não rodou para essa branch ou falhou na etapa de coverage

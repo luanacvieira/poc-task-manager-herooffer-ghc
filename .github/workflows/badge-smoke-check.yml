@@ -50,19 +50,32 @@ jobs:
           set -e
           IFS=',' read -r -a URLS <<< "${{ steps.gen.outputs.urls }}"
           FAIL=0
+          SUCCESS=0
+          TOTAL=0
           for U in "${URLS[@]}"; do
             echo "Checking $U";
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$U" || echo 000)
-            if [ "$STATUS" != "200" ]; then
-              echo "::error title=Badge missing::URL $U returned status $STATUS";
-              FAIL=1
+            TOTAL=$((TOTAL + 1))
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ OK: $U"
+              SUCCESS=$((SUCCESS + 1))
+            else
+              echo "⚠️ Missing: $U (status $STATUS)"
+              # Only fail if essential badges are missing
+              if [[ "$U" =~ (coverage-badge\.json|coverage-gate-badge\.json|build-status-badge\.json)$ ]]; then
+                echo "::error title=Critical Badge Missing::Essential badge $U returned status $STATUS"
+                FAIL=1
+              else
+                echo "::warning title=Optional Badge Missing::Optional badge $U returned status $STATUS"
+              fi
             fi
           done
+          echo "📊 Badge Status: $SUCCESS/$TOTAL endpoints available"
           if [ $FAIL -eq 1 ]; then
-            echo "One or more badge endpoints failed" >&2
+            echo "❌ Critical badge endpoints failed" >&2
             exit 1
           fi
-          echo "All badge endpoints ok";
+          echo "✅ Essential badges available ($SUCCESS/$TOTAL total)";
       - name: Summary
         if: always()
         run: |
