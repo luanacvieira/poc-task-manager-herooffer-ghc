@@ -47,6 +47,7 @@ const hardcodedSecret = () => {
 };
 
 // Usar as funções para que não sejam removidas pelo linter
+// eslint-disable-next-line no-constant-condition
 if (false) {
     unsafeEval("alert('xss')");
     unsafeInnerHTML("<script>alert('xss')</script>");
