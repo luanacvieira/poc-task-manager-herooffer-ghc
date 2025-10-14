@@ -2,7 +2,7 @@
   "repository": "luanacvieira/poc-task-manager-herooffer-ghc",
   "referenceBranch": "master",
   "timestamps": {
-    "generated": "2025-10-14T03:07:11.934Z"
+    "generated": "2025-10-14T03:12:14.608Z"
   },
   "coverage": {
     "historyPoints": 1,
@@ -22,9 +22,9 @@
     }
   },
   "workflowPerformance": {
-    "avgSec": 223.63,
+    "avgSec": 236.26,
     "p95Sec": 346,
-    "count": 16
+    "count": 19
   },
   "compositeRiskIndex": null
 }
