@@ -1,0 +1,9 @@
+[
+  {
+    "date": "2025-10-13T23:53:00Z",
+    "coverage": 95.89,
+    "diffCoverage": 100,
+    "branch": "feature/betterrole-with-tests1-aux",
+    "version": "1.0.0"
+  }
+]
