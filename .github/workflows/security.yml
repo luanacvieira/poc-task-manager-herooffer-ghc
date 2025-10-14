@@ -42,9 +42,25 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           upload: true
+          
+      - name: Check CodeQL Results
+        id: check_results
+        run: |
+          echo "Checking for CodeQL security findings..."
+          # Force failure for demonstration if we have our test vulnerabilities
+          if grep -r "eval(" frontend/src/ || grep -r "innerHTML.*userInput" frontend/src/; then
+            echo "🚨 SECURITY VULNERABILITIES DETECTED!"
+            echo "CodeQL should have detected XSS and code injection vulnerabilities."
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+          
       - name: Set Result
         id: result
-        run: echo "status=success" >> $GITHUB_OUTPUT
+        if: always()
+        run: echo "status=${{ steps.check_results.outputs.status || 'failure' }}" >> $GITHUB_OUTPUT
 
   security:
     name: Security Scans

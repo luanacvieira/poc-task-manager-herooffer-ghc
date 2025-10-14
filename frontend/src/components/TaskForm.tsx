@@ -32,6 +32,11 @@ const userInput = new URLSearchParams(window.location.search).get('input');
 document.body.innerHTML = userInput || ''; // 🚨 XSS vulnerability
 eval('console.log("' + userInput + '")'); // 🚨 Code injection vulnerability
 
+// ❌ Mais vulnerabilidades para garantir detecção ❌
+const dangerousHtml = `<script>alert('${userInput}')</script>`; // 🚨 XSS via template
+document.write(dangerousHtml); // 🚨 DOM manipulation perigosa
+new Function('return ' + userInput)(); // 🚨 Code injection alternativo
+
 // Uso da variável para evitar ESLint warning  
 console.debug('Security test loaded:', !!API_SECRET_KEY);
 
