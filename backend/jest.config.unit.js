@@ -22,7 +22,15 @@ module.exports = {
         '!**/tests/**'
     ],
     
-    // Thresholds removidos: enforcement via GitHub Actions
+    // Coverage thresholds - 80% mínimo para passar o gate
+    coverageThreshold: {
+        global: {
+            branches: 80,
+            functions: 80,
+            lines: 80,
+            statements: 80
+        }
+    },
     
     // Timeout aumentado
     testTimeout: 10000,
