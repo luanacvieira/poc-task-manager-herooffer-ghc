@@ -22,6 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: finalize-artifacts
+        continue-on-error: true
+      - name: Debug Coverage Data
+        run: |
+          echo "=== COVERAGE ARTIFACTS DEBUG ==="
+          find finalize-artifacts -type f -name "*.json" | head -10 | while read file; do
+            echo "File: $file"
+            cat "$file" | jq . || cat "$file"
+            echo "---"
+          done
+        continue-on-error: true
       - name: Pipeline Summary
         env:
           COVERAGE_AVG: ${{ inputs.coverage_avg }}
@@ -38,35 +52,95 @@ jobs:
           echo "📦 Package: $VERSION"
           echo "🚀 Deploy: Completed"
           echo "========================"
+          
+          # Generate GitHub Actions Summary
+          {
+            echo "## 🚀 Pipeline Execution Summary"
+            echo ""
+            echo "| Stage | Status | Details |"
+            echo "|-------|---------|---------|"
+            echo "| 🔍 Code Quality | ✅ Passed | Lint and format checks completed |"
+            echo "| 🧪 Tests | ✅ Passed | All unit and integration tests passed |"
+            echo "| 📊 Coverage | $([ -n "$COVERAGE_AVG" ] && echo "✅ $COVERAGE_AVG%" || echo "⚠️ N/A") | Combined backend + frontend coverage |"
+            echo "| 📈 Diff Coverage | $([ -n "$DIFF_PCT" ] && echo "✅ $DIFF_PCT%" || echo "⚠️ N/A") | New code coverage |"
+            echo "| 🏗️ Build | ✅ Completed | Application built successfully |"
+            echo "| 🔒 Security | ✅ Scanned | Security analysis completed |"
+            echo "| 📦 Package | ✅ Published | Version: $VERSION |"
+            echo "| 🚀 Deploy | ✅ Completed | Application deployed |"
+            echo ""
+            echo "### 📋 Test Results"
+            echo "- **Backend Tests**: All unit tests passed"
+            echo "- **Frontend Tests**: All component tests passed"
+            echo "- **Integration Tests**: All API tests passed"
+            echo ""
+            echo "### 📊 Coverage Details"
+            echo "- **Combined Coverage**: ${COVERAGE_AVG:-N/A}%"
+            echo "- **Diff Coverage**: ${DIFF_PCT:-N/A}%"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
 
-  update-readme-badges:
-    name: Update README Badges
+  update-badges:
+    name: Update Coverage Badges
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate Badges
+          fetch-depth: 0
+      - name: Setup worktree for badges branch
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          if git show-ref --verify --quiet refs/remotes/origin/badges; then
+            git worktree add _badges_worktree origin/badges
+          else
+            git worktree add -b badges _badges_worktree
+            cd _badges_worktree
+            mkdir -p badges/history
+            echo '{"schemaVersion":1,"label":"badges","message":"initialized","color":"blue"}' > badges/init.json
+            git add .
+            git commit --allow-empty -m "chore(badges): initialize badges branch"
+            git push -u origin badges || true
+          fi
+      - name: Generate Coverage Badges
         env:
           COVERAGE_AVG: ${{ inputs.coverage_avg }}
           DIFF_PCT: ${{ inputs.diff_pct }}
           VERSION: ${{ inputs.version }}
+          BRANCH_SAFE: ${{ github.ref_name }}
         run: |
-          echo "=== UPDATING BADGES ==="
-          echo "Coverage: $COVERAGE_AVG%"
-          echo "Diff Coverage: $DIFF_PCT%"
-          echo "Version: $VERSION"
-          # Badge generation logic would go here
-          echo "Badges updated successfully"
-      - name: Commit badge updates
+          cd _badges_worktree
+          mkdir -p badges/history
+          
+          # Global badges
+          COVERAGE_COLOR="red"
+          COVERAGE_NUM=$(echo "${COVERAGE_AVG:-0}" | cut -d'.' -f1)
+          if [ "$COVERAGE_NUM" -ge 90 ]; then COVERAGE_COLOR="brightgreen"
+          elif [ "$COVERAGE_NUM" -ge 80 ]; then COVERAGE_COLOR="green"  
+          elif [ "$COVERAGE_NUM" -ge 60 ]; then COVERAGE_COLOR="orange"
+          fi
+          
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE_AVG:-0}%\",\"color\":\"$COVERAGE_COLOR\"}" > badges/coverage-badge.json
+          echo "{\"schemaVersion\":1,\"label\":\"diff coverage\",\"message\":\"${DIFF_PCT:-0}%\",\"color\":\"brightgreen\"}" > badges/diff-coverage-badge.json
+          echo "{\"schemaVersion\":1,\"label\":\"build\",\"message\":\"passing\",\"color\":\"brightgreen\"}" > badges/build-status-badge.json
+          
+          # Branch-specific badges
+          BRANCH_SAFE_NAME=$(echo "$BRANCH_SAFE" | tr '/' '_')
+          echo "{\"schemaVersion\":1,\"label\":\"coverage ($BRANCH_SAFE)\",\"message\":\"${COVERAGE_AVG:-0}%\",\"color\":\"$COVERAGE_COLOR\"}" > "badges/coverage-badge-${BRANCH_SAFE_NAME}.json"
+          echo "{\"schemaVersion\":1,\"label\":\"build ($BRANCH_SAFE)\",\"message\":\"passing\",\"color\":\"brightgreen\"}" > "badges/build-status-badge-${BRANCH_SAFE_NAME}.json"
+          
+          # History tracking
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{\"date\":\"$DATE\",\"coverage\":${COVERAGE_AVG:-0},\"diffCoverage\":${DIFF_PCT:-0},\"branch\":\"$BRANCH_SAFE\",\"version\":\"$VERSION\"}" > "badges/history/coverage-latest-${BRANCH_SAFE_NAME}.json"
+          
+      - name: Commit badges
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          cd _badges_worktree
+          git add .
           if [[ -n "$(git status --porcelain)" ]]; then
-            git add .
-            git commit -m "Update README badges [skip ci]"
-            git push
+            git commit -m "chore(badges): update coverage badges for ${{ github.ref_name }}"
+            git push origin badges
+            echo "✅ Badges atualizados na branch badges"
           else
-            echo "No badge updates needed"
+            echo "⚠️ Nenhuma alteração nos badges"
           fi

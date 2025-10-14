@@ -4,11 +4,13 @@ on:
   schedule:
     - cron: '0 */6 * * *' # a cada 6 horas
   workflow_dispatch:
+  workflow_call:
   push:
     paths:
       - 'README.md'
-      - '.github/workflows/tests-and-coverage.yml'
-      - '.github/workflows/ci-cd.yml'
+      - '.github/workflows/orchestrator.yml'
+      - '.github/workflows/testing.yml'
+      - '.github/workflows/finalize.yml'
 
 jobs:
   verify-badges:

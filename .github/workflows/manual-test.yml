@@ -21,12 +21,16 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Test Summary
+        env:
+          TEST_TYPE: ${{ inputs.test_type }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           echo "🧪 TESTING ALL WORKFLOWS"
           echo "========================"
-          echo "Test Type: ${{ inputs.test_type }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "Test Type: $TEST_TYPE"
+          echo "Branch: $BRANCH_NAME"
+          echo "Commit: $COMMIT_SHA"
           echo "Environments configured: QA, PRD, github-pages"
           echo ""
           echo "📋 Workflows to be tested:"
