@@ -94,3 +94,17 @@ jobs:
       version: ${{ github.ref_name }}-${{ github.sha }}
     secrets: inherit
     if: always()
+
+  analytics-dashboard:
+    name: Analytics Dashboard
+    needs: [finalize]
+    uses: ./.github/workflows/analytics-dashboard.yml
+    secrets: inherit
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+
+  badge-smoke-check:
+    name: Badge Verification
+    needs: [analytics-dashboard]
+    uses: ./.github/workflows/badge-smoke-check.yml
+    secrets: inherit
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
