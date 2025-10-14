@@ -32,10 +32,18 @@ jobs:
           cache: npm
       - name: Install
         run: |
-          if [ "${{ matrix.target }}" = backend ]; then (cd backend && (npm ci || npm install --legacy-peer-deps)); else (cd frontend && (npm ci || npm install --legacy-peer-deps)); fi
+          if [ "${{ matrix.target }}" = backend ]; then 
+            cd backend && (npm ci || npm install --legacy-peer-deps)
+          else 
+            cd frontend && (npm ci || npm install --legacy-peer-deps)
+          fi
       - name: Run tests
         run: |
-          if [ "${{ matrix.target }}" = backend ]; then (cd backend && bash ../.github/scripts/backend-tests.sh); else (cd frontend && CI=true bash ../.github/scripts/frontend-tests.sh); fi
+          if [ "${{ matrix.target }}" = backend ]; then 
+            cd backend && npm test
+          else 
+            cd frontend && CI=true npm test
+          fi
       - name: Upload Coverage
         if: always()
         uses: actions/upload-artifact@v4
