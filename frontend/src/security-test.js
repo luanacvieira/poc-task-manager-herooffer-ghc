@@ -63,7 +63,7 @@ function demonstratePathTraversal() {
 }
 
 // Export functions for CodeQL analysis
-module.exports = {
+export {
     demonstrateXSS,
     demonstrateCodeInjection,
     demonstratePrototypePollution,
