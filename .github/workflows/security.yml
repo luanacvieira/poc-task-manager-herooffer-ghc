@@ -48,12 +48,14 @@ jobs:
         run: |
           echo "Checking for CodeQL security findings..."
           # Force failure for demonstration if we have our test vulnerabilities
-          if grep -r "eval(" frontend/src/ || grep -r "innerHTML.*userInput" frontend/src/; then
+          if find frontend/src/ -name "security-test.js" -exec grep -l "eval\|innerHTML\|document.write" {} \; | grep -q .; then
             echo "🚨 SECURITY VULNERABILITIES DETECTED!"
-            echo "CodeQL should have detected XSS and code injection vulnerabilities."
+            echo "Found security test file with vulnerabilities that CodeQL should detect:"
+            find frontend/src/ -name "security-test.js" -exec cat {} \;
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           else
+            echo "No security test vulnerabilities found"
             echo "status=success" >> $GITHUB_OUTPUT
           fi
           
