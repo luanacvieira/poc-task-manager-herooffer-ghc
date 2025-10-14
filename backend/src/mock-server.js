@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (req, res) => {     
   res.json({ status: 'OK', message: 'Task Manager Backend is running!' });
 });
 
@@ -33,9 +33,17 @@ app.get('/api/tasks', (req, res) => {
 });
 
 app.post('/api/tasks', (req, res) => {
+  // Validação e sanitização para evitar object injection
+  const { title, description, priority, category, tags, assignedTo, userId } = req.body;
   const task = {
     _id: (Math.random() * 1000000).toString(),
-    ...req.body,
+    title: title || '',
+    description: description || '',
+    priority: priority || 'medium',
+    category: category || 'general',
+    tags: Array.isArray(tags) ? tags : [],
+    assignedTo: assignedTo || '',
+    userId: userId || '',
     completed: false,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -50,9 +58,21 @@ app.put('/api/tasks/:id', (req, res) => {
     return res.status(404).json({ message: 'Task not found' });
   }
   
+  // Validação e sanitização para evitar object injection
+  const { title, description, priority, category, tags, assignedTo, completed } = req.body;
+  const updatedFields = {};
+  
+  if (title !== undefined) updatedFields.title = title;
+  if (description !== undefined) updatedFields.description = description;
+  if (priority !== undefined) updatedFields.priority = priority;
+  if (category !== undefined) updatedFields.category = category;
+  if (Array.isArray(tags)) updatedFields.tags = tags;
+  if (assignedTo !== undefined) updatedFields.assignedTo = assignedTo;
+  if (typeof completed === 'boolean') updatedFields.completed = completed;
+  
   tasks[taskIndex] = {
     ...tasks[taskIndex],
-    ...req.body,
+    ...updatedFields,
     updatedAt: new Date()
   };
   

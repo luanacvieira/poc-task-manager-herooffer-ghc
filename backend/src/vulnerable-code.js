@@ -51,4 +51,4 @@ module.exports = {
     JWT_KEY,
     DB_CONN
 }
-*/;
+*/
