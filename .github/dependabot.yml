@@ -1,0 +1,105 @@
+# Dependabot Configuration
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # 🔄 Backend Dependencies (Node.js/npm)
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    assignees:
+      - "luanacvieira"
+    commit-message:
+      prefix: "deps(backend):"
+      prefix-development: "deps-dev(backend):"
+    labels:
+      - "dependencies"
+      - "backend"
+      - "automerge"
+    # Agrupar PRs menores para reduzir ruído
+    groups:
+      backend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # 🎨 Frontend Dependencies (Node.js/npm)
+  - package-ecosystem: "npm"  
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    assignees:
+      - "luanacvieira"
+    commit-message:
+      prefix: "deps(frontend):"
+      prefix-development: "deps-dev(frontend):"
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "automerge"
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # 🔧 Root Project Dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"  
+      time: "11:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(root):"
+    labels:
+      - "dependencies"
+      - "root"
+      - "automerge"
+
+  # 🐳 Docker Dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly" 
+      day: "tuesday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps(docker):"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "infrastructure"
+
+  # ⚡ GitHub Actions Dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday" 
+      time: "14:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(actions):"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"

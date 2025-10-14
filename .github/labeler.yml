@@ -1,0 +1,129 @@
+# Auto-Labeler Configuration
+# https://github.com/actions/labeler
+
+# 🔧 Backend Changes
+backend:
+  - backend/**/*
+  - backend/**/*.js
+  - backend/**/*.ts
+  - backend/**/*.json
+
+# 🎨 Frontend Changes  
+frontend:
+  - frontend/**/*
+  - frontend/**/*.tsx
+  - frontend/**/*.ts
+  - frontend/**/*.css
+  - frontend/**/*.html
+
+# 🧪 Testing Changes
+testing:
+  - "**/*test*"
+  - "**/*spec*"
+  - "**/tests/**/*"
+  - "**/__tests__/**/*"
+  - "**/jest.config.*"
+  - "**/coverage/**/*"
+
+# 📚 Documentation Changes
+documentation:
+  - "*.md"
+  - "docs/**/*"
+  - "**/*.md"
+  - "README*"
+
+# 🔄 CI/CD Changes
+ci-cd:
+  - ".github/**/*"
+  - ".github/workflows/**/*"
+  - "docker-compose*.yml"
+  - "**/Dockerfile*"
+  - "orchestrator*.yml"
+
+# 📦 Dependencies
+dependencies:
+  - "**/package.json"
+  - "**/package-lock.json" 
+  - "**/yarn.lock"
+  - ".github/dependabot.yml"
+
+# 🏷️ Badge System
+badges:
+  - "badges/**/*"
+  - "**/*badge*"
+  - "**/badge-*"
+  - "combined-coverage/**/*"
+
+# 📊 Data & Analytics
+analytics:
+  - "data-engineering/**/*"
+  - "**/*.sql"
+  - "**/analytics-*"
+  - "scripts/generate-analytics-dashboard.js"
+
+# 🔧 Configuration
+configuration:
+  - "*.json"
+  - "*.yml"
+  - "*.yaml"
+  - ".github/CODEOWNERS"
+  - "sonar-project.properties"
+  - "eslint.config.js"
+
+# 🔒 Security & Compliance
+security:
+  - "SECURITY.md"
+  - ".github/CODEOWNERS" 
+  - ".github/dependabot.yml"
+  - "**/*security*"
+
+# 🚀 Infrastructure
+infrastructure:
+  - "docker-compose*.yml"
+  - "**/Dockerfile*"
+  - "orchestrator*.yml"
+  - "**/infrastructure/**/*"
+
+# 🎯 Controllers (Backend)
+controllers:
+  - "**/controllers/**/*"
+  - "**/*Controller*"
+
+# 📋 Models (Backend)
+models:
+  - "**/models/**/*" 
+  - "**/*Model*"
+
+# 🛣️ Routes (Backend)
+routes:
+  - "**/routes/**/*"
+  - "**/*Route*"
+
+# 🎨 Components (Frontend)
+components:
+  - "**/components/**/*"
+  - "**/*Component*"
+
+# 📄 Pages (Frontend)
+pages:
+  - "**/pages/**/*"
+  - "**/*Page*"
+
+# 🔌 Services & APIs
+api:
+  - "**/services/**/*"
+  - "**/*Service*"
+  - "**/*api*"
+
+# 🎨 Styles
+styles:
+  - "**/*.css"
+  - "**/*.scss"
+  - "**/*.less"
+  - "**/styles/**/*"
+
+# 🔧 Scripts & Tools
+scripts:
+  - "scripts/**/*"
+  - "**/*.sh"
+  - "tools/**/*"
