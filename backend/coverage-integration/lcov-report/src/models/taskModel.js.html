@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/routes/taskRoutes.js</title>
+    <title>Code coverage report for src/models/taskModel.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../prettify.css" />
     <link rel="stylesheet" href="../../base.css" />
@@ -19,13 +19,13 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/routes</a> taskRoutes.js</h1>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/models</a> taskModel.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>10/10</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>10/10</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
@@ -83,46 +83,64 @@
 <a name='L18'></a><a href='#L18'>18</a>
 <a name='L19'></a><a href='#L19'>19</a>
 <a name='L20'></a><a href='#L20'>20</a>
-<a name='L21'></a><a href='#L21'>21</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&nbsp;
-const express = require('express');
-const router = express.Router();
-const rateLimit = require('express-rate-limit');
-const taskController = require('../controllers/taskController');
+const mongoose = require('mongoose');
 &nbsp;
-// Rate limit básico para mitigar abuso (ajustar conforme necessidade)
-const apiLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutos
-	max: 300, // máximo de requisições por IP nesse intervalo
-	standardHeaders: true,
-	legacyHeaders: false
+const taskSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    completed: { type: Boolean, default: false },
+    priority: { 
+        type: String, 
+        enum: ['low', 'medium', 'high', 'urgent'], 
+        default: 'medium' 
+    },
+    dueDate: { type: Date },
+    category: { 
+        type: String,
+        enum: ['work', 'personal', 'study', 'health', 'other'],
+        default: 'other'
+    },
+    tags: [{ type: String }],
+    assignedTo: { type: String, required: true },
+    userId: { type: String, required: true }
+}, {
+    timestamps: true // Adiciona createdAt e updatedAt automaticamente
 });
 &nbsp;
-router.get('/tasks', apiLimiter, taskController.getTasks);
-router.post('/tasks', apiLimiter, taskController.createTask);
-router.put('/tasks/:id', apiLimiter, taskController.updateTask);
-router.delete('/tasks/:id', apiLimiter, taskController.deleteTask);
-&nbsp;
-module.exports = router;
+module.exports = mongoose.model('Task', taskSchema);
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -130,7 +148,7 @@ module.exports = router;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-10-14T02:26:21.354Z
+                at 2025-10-14T02:22:26.703Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

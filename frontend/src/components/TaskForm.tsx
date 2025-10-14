@@ -6,12 +6,55 @@ interface TaskFormProps {
     onTaskAdded: () => void;
 }
 
-// TESTE PARA FALHAR TYPECHECK
-//function TaskForm(props: TaskFormProps) {
+// TESTE PARA FALHAR TYPECHECK - função com erro de tipo mas sem conflito de nome
+/*function TaskFormWithTypeError(props: TaskFormProps) {
     // Erro proposital: chamando onTaskAdded com argumento inesperado
-//    props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
-//    return <div>Task Form</div>;
-//}
+    props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
+    return <div>Task Form</div>;
+}
+
+// eslint-disable-next-line no-constant-condition
+if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
+
+// 🎯 POC DEMO: Para ativar erro TypeScript, descomente a linha abaixo:
+TaskFormWithTypeError({ onTaskAdded: () => {} });
+*/
+
+// TESTE PARA FALHAR CODEQL - vulnerabilidades de segurança propositais
+// Descomente o bloco abaixo para demonstrar detecção de vulnerabilidades pelo CodeQL:
+
+const unsafeEval = (userInput: string) => {
+    // ❌ CodeQL: Code injection via eval()
+    return eval(userInput);
+};
+
+const unsafeInnerHTML = (content: string) => {
+    // ❌ CodeQL: XSS via dangerouslySetInnerHTML  
+    document.getElementById('content')!.innerHTML = content;
+};
+
+const unsafeSQLQuery = (userId: string) => {
+    // ❌ CodeQL: SQL injection vulnerability
+    const query = `SELECT * FROM users WHERE id = '${userId}'`;
+    return query;
+};
+
+const hardcodedSecret = () => {
+    // ❌ CodeQL: Hardcoded credentials
+    const apiKey = "sk-1234567890abcdef";
+    const password = "admin123";
+    return { apiKey, password };
+};
+
+// Usar as funções para que não sejam removidas pelo linter
+// eslint-disable-next-line no-constant-condition
+if (false) {
+    unsafeEval("alert('xss')");
+    unsafeInnerHTML("<script>alert('xss')</script>");
+    unsafeSQLQuery("1' OR '1'='1");
+    hardcodedSecret();
+}
+//fim do teste faha codeql
 
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({
