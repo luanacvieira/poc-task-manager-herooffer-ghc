@@ -23,6 +23,7 @@ module.exports = {
     collectCoverageFrom: [
         'src/**/*.js',
         '!src/app.js', // Arquivo principal excluído pois é difícil testar
+        '!src/vulnerable-code.js', // vulnerabilidades propositais para CodeQL
         '!**/node_modules/**',
         '!**/coverage/**'
     ],
