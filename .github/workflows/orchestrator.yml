@@ -89,8 +89,8 @@ jobs:
     needs: [code-quality, testing, build, security, analysis, package, deploy]
     uses: ./.github/workflows/finalize.yml
     with:
-      coverage_avg: "94.2"
-      diff_pct: "100"
+      coverage_avg: ${{ needs.testing.outputs.coverage_avg }}
+      diff_pct: ${{ needs.testing.outputs.diff_pct }}
       version: ${{ github.ref_name }}-${{ github.sha }}
     secrets: inherit
     if: always()

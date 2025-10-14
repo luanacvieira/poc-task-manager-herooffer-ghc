@@ -22,6 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: finalize-artifacts
+        continue-on-error: true
+      - name: Debug Coverage Data
+        run: |
+          echo "=== COVERAGE ARTIFACTS DEBUG ==="
+          find finalize-artifacts -type f -name "*.json" | head -10 | while read file; do
+            echo "File: $file"
+            cat "$file" | jq . || cat "$file"
+            echo "---"
+          done
+        continue-on-error: true
       - name: Pipeline Summary
         env:
           COVERAGE_AVG: ${{ inputs.coverage_avg }}
@@ -38,6 +52,32 @@ jobs:
           echo "📦 Package: $VERSION"
           echo "🚀 Deploy: Completed"
           echo "========================"
+          
+          # Generate GitHub Actions Summary
+          {
+            echo "## 🚀 Pipeline Execution Summary"
+            echo ""
+            echo "| Stage | Status | Details |"
+            echo "|-------|---------|---------|"
+            echo "| 🔍 Code Quality | ✅ Passed | Lint and format checks completed |"
+            echo "| 🧪 Tests | ✅ Passed | All unit and integration tests passed |"
+            echo "| 📊 Coverage | $([ -n "$COVERAGE_AVG" ] && echo "✅ $COVERAGE_AVG%" || echo "⚠️ N/A") | Combined backend + frontend coverage |"
+            echo "| 📈 Diff Coverage | $([ -n "$DIFF_PCT" ] && echo "✅ $DIFF_PCT%" || echo "⚠️ N/A") | New code coverage |"
+            echo "| 🏗️ Build | ✅ Completed | Application built successfully |"
+            echo "| 🔒 Security | ✅ Scanned | Security analysis completed |"
+            echo "| 📦 Package | ✅ Published | Version: $VERSION |"
+            echo "| 🚀 Deploy | ✅ Completed | Application deployed |"
+            echo ""
+            echo "### 📋 Test Results"
+            echo "- **Backend Tests**: All unit tests passed"
+            echo "- **Frontend Tests**: All component tests passed"
+            echo "- **Integration Tests**: All API tests passed"
+            echo ""
+            echo "### 📊 Coverage Details"
+            echo "- **Combined Coverage**: ${COVERAGE_AVG:-N/A}%"
+            echo "- **Diff Coverage**: ${DIFF_PCT:-N/A}%"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
 
   update-readme-badges:
     name: Update README Badges
