@@ -13,6 +13,12 @@ function TaskFormWithTypeError(props: TaskFormProps) {
     return <div>Task Form</div>;
 }
 
+// eslint-disable-next-line no-constant-condition
+if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
+
+// 🎯 POC DEMO: Para ativar erro TypeScript, descomente a linha abaixo:
+// TaskFormWithTypeError({ onTaskAdded: () => {} });
+
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({
         title: '',
