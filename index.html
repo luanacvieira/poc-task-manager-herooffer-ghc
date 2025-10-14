@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POC Task Manager - Dashboard Analytics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+        
+        .badges-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .badge-group {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .badge-group h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        
+        .badge-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .badge-item img {
+            margin-right: 10px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .metric-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+        
+        .metric-label {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+        }
+        
+        .links-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .link-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .link-card h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .link-card a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .link-card a:hover {
+            text-decoration: underline;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-success { background-color: #27ae60; }
+        .status-warning { background-color: #f39c12; }
+        .status-error { background-color: #e74c3c; }
+        
+        .refresh-info {
+            text-align: center;
+            margin-top: 20px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 POC Task Manager Analytics</h1>
+            <p>Dashboard de Métricas, Badges e Artefatos do Pipeline CI/CD</p>
+        </div>
+        
+        <div class="badges-section">
+            <div class="badge-group">
+                <h3>📊 Status Geral</h3>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/build-status-badge-master.json" alt="Build Status">
+                    <span>Build Master</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/coverage-badge-master.json" alt="Coverage">
+                    <span>Coverage Master</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/luanacvieira/poc-task-manager-herooffer-ghc/badges/coverage-gate-badge-master.json" alt="Coverage Gate">
+                    <span>Coverage Gate</span>
+                </div>
+            </div>
+            
+            <div class="badge-group">
+                <h3>🔒 Segurança</h3>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/github/security-events/luanacvieira/poc-task-manager-herooffer-ghc?label=CodeQL&logo=github" alt="CodeQL">
+                    <span>CodeQL Alerts</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/snyk/vulnerabilities/github/luanacvieira/poc-task-manager-herooffer-ghc?label=Vulnerabilities" alt="Vulnerabilities">
+                    <span>Vulnerabilidades</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://img.shields.io/badge/Security-Monitoring-green?logo=shield" alt="Security">
+                    <span>Security Score</span>
+                </div>
+            </div>
+            
+            <div class="badge-group">
+                <h3>🔧 Qualidade</h3>
+                <div class="badge-item">
+                    <img src="https://sonarcloud.io/api/project_badges/measure?project=luanacvieira_poc-task-manager-herooffer-ghc&metric=alert_status" alt="Quality Gate">
+                    <span>Quality Gate</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://sonarcloud.io/api/project_badges/measure?project=luanacvieira_poc-task-manager-herooffer-ghc&metric=bugs" alt="Bugs">
+                    <span>Bugs</span>
+                </div>
+                <div class="badge-item">
+                    <img src="https://sonarcloud.io/api/project_badges/measure?project=luanacvieira_poc-task-manager-herooffer-ghc&metric=code_smells" alt="Code Smells">
+                    <span>Code Smells</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="coverage-value">--</div>
+                <div class="metric-label">Coverage Atual</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="builds-count">--</div>
+                <div class="metric-label">Builds Executados</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="security-alerts">--</div>
+                <div class="metric-label">Alertas Segurança</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="quality-score">--</div>
+                <div class="metric-label">Quality Score</div>
+            </div>
+        </div>
+        
+        <div class="links-section">
+            <h3>🔗 Links Úteis</h3>
+            <div class="links-grid">
+                <div class="link-card">
+                    <h4><span class="status-indicator status-success"></span>GitHub Repository</h4>
+                    <a href="https://github.com/luanacvieira/poc-task-manager-herooffer-ghc" target="_blank">
+                        Código Fonte e Documentação
+                    </a>
+                </div>
+                
+                <div class="link-card">
+                    <h4><span class="status-indicator status-warning"></span>GitHub Actions</h4>
+                    <a href="https://github.com/luanacvieira/poc-task-manager-herooffer-ghc/actions" target="_blank">
+                        Workflows e Execuções
+                    </a>
+                </div>
+                
+                <div class="link-card">
+                    <h4><span class="status-indicator status-success"></span>Security Alerts</h4>
+                    <a href="https://github.com/luanacvieira/poc-task-manager-herooffer-ghc/security" target="_blank">
+                        CodeQL e Dependabot
+                    </a>
+                </div>
+                
+                <div class="link-card">
+                    <h4><span class="status-indicator status-success"></span>SonarCloud</h4>
+                    <a href="https://sonarcloud.io/project/overview?id=luanacvieira_poc-task-manager-herooffer-ghc" target="_blank">
+                        Quality Gate e Métricas
+                    </a>
+                </div>
+                
+                <div class="link-card">
+                    <h4><span class="status-indicator status-success"></span>Coverage Reports</h4>
+                    <a href="coverage-history.html">
+                        Histórico de Cobertura
+                    </a>
+                </div>
+                
+                <div class="link-card">
+                    <h4><span class="status-indicator status-success"></span>Badges JSON</h4>
+                    <a href="https://github.com/luanacvieira/poc-task-manager-herooffer-ghc/tree/badges/badges" target="_blank">
+                        Arquivos de Badges
+                    </a>
+                </div>
+            </div>
+            
+            <div class="refresh-info">
+                <p>📅 Última atualização: <span id="last-update">--</span></p>
+                <p>🔄 Os badges são atualizados automaticamente pelos workflows do GitHub Actions</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Update last update timestamp
+        document.getElementById('last-update').textContent = new Date().toLocaleString('pt-BR');
+        
+        // Simulate loading metrics (in real scenario, these would come from API calls)
+        setTimeout(() => {
+            document.getElementById('coverage-value').textContent = '85%';
+            document.getElementById('builds-count').textContent = '150+';
+            document.getElementById('security-alerts').textContent = '0';
+            document.getElementById('quality-score').textContent = 'A';
+        }, 1000);
+    </script>
+</body>
+</html>

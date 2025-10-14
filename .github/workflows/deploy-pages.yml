@@ -1,0 +1,78 @@
+name: 🚀 Deploy GitHub Pages
+
+on:
+  push:
+    branches: [ main, master, badges ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Create Pages Structure
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp coverage-history.html _site/
+          
+          # Copy existing docs if available
+          if [ -d "docs" ]; then
+            cp -r docs/* _site/ 2>/dev/null || true
+          fi
+          
+          # Copy coverage reports if available
+          if [ -d "combined-coverage" ]; then
+            mkdir -p _site/coverage
+            cp -r combined-coverage/* _site/coverage/ 2>/dev/null || true
+          fi
+          
+          # Create badges endpoint
+          if [ -d "badges" ]; then
+            cp -r badges _site/ 2>/dev/null || true
+          fi
+          
+          # Create sitemap
+          cat > _site/sitemap.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url>
+              <loc>https://luanacvieira.github.io/poc-task-manager-herooffer-ghc/</loc>
+              <lastmod>$(date -u +"%Y-%m-%dT%H:%M:%S+00:00")</lastmod>
+              <priority>1.0</priority>
+            </url>
+            <url>
+              <loc>https://luanacvieira.github.io/poc-task-manager-herooffer-ghc/coverage-history.html</loc>
+              <lastmod>$(date -u +"%Y-%m-%dT%H:%M:%S+00:00")</lastmod>
+              <priority>0.8</priority>
+            </url>
+          </urlset>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
