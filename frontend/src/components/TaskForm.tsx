@@ -17,7 +17,7 @@ function TaskFormWithTypeError(props: TaskFormProps) {
 if (false) TaskFormWithTypeError({ onTaskAdded: () => {} });
 
 // 🎯 POC DEMO: Para ativar erro TypeScript, descomente a linha abaixo:
-// TaskFormWithTypeError({ onTaskAdded: () => {} });
+TaskFormWithTypeError({ onTaskAdded: () => {} });
 
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
     const [formData, setFormData] = useState({
