@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "label": "build",
-  "message": "passing",
+  "label": "coverage",
+  "message": "95.89%",
   "color": "brightgreen"
 }
