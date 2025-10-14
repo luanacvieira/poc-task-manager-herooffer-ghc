@@ -1,0 +1,55 @@
+# CODEOWNERS - Revisores Obrigatórios
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# 🛡️ Global owners (fallback para qualquer mudança)
+* @luanacvieira
+
+# 🔧 Backend & API - Requer aprovação de desenvolvedores backend
+/backend/ @luanacvieira
+/backend/src/controllers/ @luanacvieira
+/backend/src/models/ @luanacvieira  
+/backend/src/routes/ @luanacvieira
+/backend/tests/ @luanacvieira
+/backend/package*.json @luanacvieira
+
+# 🎨 Frontend & UI - Requer aprovação de desenvolvedores frontend
+/frontend/ @luanacvieira
+/frontend/src/ @luanacvieira
+/frontend/package*.json @luanacvieira
+
+# 📊 Data Engineering & Analytics - Requer aprovação de analistas
+/data-engineering/ @luanacvieira
+/scripts/generate-analytics-dashboard.js @luanacvieira
+*.sql @luanacvieira
+
+# 🔄 CI/CD & DevOps - Requer aprovação de DevOps/SRE
+/.github/ @luanacvieira
+/docker-compose.yml @luanacvieira
+/Dockerfile @luanacvieira
+/.github/workflows/ @luanacvieira
+/orchestrator*.yml @luanacvieira
+
+# 📋 Documentation & Configuration - Requer aprovação de tech leads
+/README.md @luanacvieira
+/docs/ @luanacvieira
+/SECURITY.md @luanacvieira
+/sonar-project.properties @luanacvieira
+
+# 🏷️ Badge System & Metrics - Requer aprovação de QA/DevOps
+/badges/ @luanacvieira
+/combined-coverage/ @luanacvieira
+*badge*.json @luanacvieira
+*coverage*.json @luanacvieira
+
+# 📦 Dependencies - Requer aprovação de security reviewers
+package*.json @luanacvieira
+/backend/package*.json @luanacvieira
+/frontend/package*.json @luanacvieira
+
+# 🔒 Security & Configuration - Requer aprovação dupla
+/.github/workflows/dependabot*.yml @luanacvieira
+/.github/CODEOWNERS @luanacvieira
+/.github/dependabot.yml @luanacvieira
+
+# Nota: Para múltiplos reviewers, use: arquivo.js @user1 @user2
+# Para teams: arquivo.js @org/team-name

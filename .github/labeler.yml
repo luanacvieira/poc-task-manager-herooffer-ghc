@@ -1,0 +1,167 @@
+# Auto-Labeler Configuration v5
+# https://github.com/actions/labeler
+
+# 🔧 Backend Changes
+backend:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - backend/**/*
+      - backend/**/*.js
+      - backend/**/*.ts
+      - backend/**/*.json
+
+# 🎨 Frontend Changes  
+frontend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - frontend/**/*
+      - frontend/**/*.tsx
+      - frontend/**/*.ts
+      - frontend/**/*.css
+      - frontend/**/*.html
+
+# 🧪 Testing Changes
+testing:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*test*"
+      - "**/*spec*"
+      - "**/tests/**/*"
+      - "**/__tests__/**/*"
+      - "**/jest.config.*"
+      - "**/coverage/**/*"
+
+# 📚 Documentation Changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "*.md"
+      - "docs/**/*"
+      - "**/*.md"
+      - "README*"
+
+# 🔄 CI/CD Changes
+ci-cd:
+  - changed-files:
+    - any-glob-to-any-file:
+      - ".github/**/*"
+      - ".github/workflows/**/*"
+      - "docker-compose*.yml"
+      - "**/Dockerfile*"
+      - "orchestrator*.yml"
+
+# 📦 Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/package.json"
+      - "**/package-lock.json" 
+      - "**/yarn.lock"
+      - ".github/dependabot.yml"
+
+# 🏷️ Badge System
+badges:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "badges/**/*"
+      - "**/*badge*"
+      - "**/badge-*"
+      - "combined-coverage/**/*"
+
+# 📊 Data & Analytics
+analytics:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "data-engineering/**/*"
+      - "**/*.sql"
+      - "**/analytics-*"
+      - "scripts/generate-analytics-dashboard.js"
+
+# 🔧 Configuration
+configuration:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "*.json"
+      - "*.yml"
+      - "*.yaml"
+      - ".github/CODEOWNERS"
+      - "sonar-project.properties"
+      - "eslint.config.js"
+
+# 🔒 Security & Compliance
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "SECURITY.md"
+      - ".github/CODEOWNERS" 
+      - ".github/dependabot.yml"
+      - "**/*security*"
+
+# 🚀 Infrastructure
+infrastructure:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "docker-compose*.yml"
+      - "**/Dockerfile*"
+      - "orchestrator*.yml"
+      - "**/infrastructure/**/*"
+
+# 🎯 Controllers (Backend)
+controllers:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/controllers/**/*"
+      - "**/*Controller*"
+
+# 📋 Models (Backend)
+models:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/models/**/*" 
+      - "**/*Model*"
+
+# 🛣️ Routes (Backend)
+routes:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/routes/**/*"
+      - "**/*Route*"
+
+# 🎨 Components (Frontend)
+components:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/components/**/*"
+      - "**/*Component*"
+
+# 📄 Pages (Frontend)
+pages:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/pages/**/*"
+      - "**/*Page*"
+
+# 🔌 Services & APIs
+api:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/services/**/*"
+      - "**/*Service*"
+      - "**/*api*"
+
+# 🎨 Styles
+styles:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*.css"
+      - "**/*.scss"
+      - "**/*.less"
+      - "**/styles/**/*"
+
+# 🔧 Scripts & Tools
+scripts:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "scripts/**/*"
+      - "**/*.sh"
+      - "tools/**/*"
