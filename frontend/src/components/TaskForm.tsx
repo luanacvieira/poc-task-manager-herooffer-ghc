@@ -27,7 +27,12 @@ console.log(undefinedVar); // ❌ ESLint: variable not defined
 // ❌ SECURITY SCAN (Gitleaks) - FUNCIONA ✅ ❌
 const API_SECRET_KEY = "sk-live-abcd1234efgh5678ijkl9012"; // ✅ Gitleaks detecta
 
-// Uso da variável para evitar ESLint warning
+// ❌ CODEQL VULNERABILITIES - Explícitas para detecção ❌
+const userInput = new URLSearchParams(window.location.search).get('input');
+document.body.innerHTML = userInput || ''; // 🚨 XSS vulnerability
+eval('console.log("' + userInput + '")'); // 🚨 Code injection vulnerability
+
+// Uso da variável para evitar ESLint warning  
 console.debug('Security test loaded:', !!API_SECRET_KEY);
 
 const TaskForm: React.FC<TaskFormProps> = ({ onTaskAdded }) => {
