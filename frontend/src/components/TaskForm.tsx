@@ -23,36 +23,45 @@ TaskFormWithTypeError({ onTaskAdded: () => {} });
 // TESTE PARA FALHAR CODEQL - vulnerabilidades de segurança propositais
 // Descomente o bloco abaixo para demonstrar detecção de vulnerabilidades pelo CodeQL:
 
-const unsafeEval = (userInput: string) => {
-    // ❌ CodeQL: Code injection via eval()
-    return eval(userInput);
+// ❌ CodeQL: Hardcoded credentials (sempre detectável)
+const API_KEY = "sk-1234567890abcdef"; // CodeQL detecta hardcoded secrets
+const DB_PASSWORD = "admin123";
+
+// ❌ CodeQL: Code injection via eval() - função exportada (detectável)
+export const processUserCode = (code: string) => {
+    // Vulnerabilidade: eval com input do usuário
+    return eval(code);
 };
 
-const unsafeInnerHTML = (content: string) => {
-    // ❌ CodeQL: XSS via dangerouslySetInnerHTML  
-    document.getElementById('content')!.innerHTML = content;
+// ❌ CodeQL: XSS vulnerability - função que pode ser chamada  
+const updateContent = (htmlContent: string) => {
+    // Vulnerabilidade: innerHTML sem sanitização
+    const element = document.getElementById('dynamic-content');
+    if (element) {
+        element.innerHTML = htmlContent; // CodeQL detecta XSS
+    }
 };
 
-const unsafeSQLQuery = (userId: string) => {
-    // ❌ CodeQL: SQL injection vulnerability
-    const query = `SELECT * FROM users WHERE id = '${userId}'`;
-    return query;
+// ❌ CodeQL: SQL injection - template string com input
+const buildUserQuery = (userId: string) => {
+    // Vulnerabilidade: SQL injection via template literal
+    return `SELECT * FROM users WHERE id = '${userId}' AND active = 1`;
 };
 
-const hardcodedSecret = () => {
-    // ❌ CodeQL: Hardcoded credentials
-    const apiKey = "sk-1234567890abcdef";
-    const password = "admin123";
-    return { apiKey, password };
+// Uso das funções vulneráveis em contexto real (não dead code)
+const vulnerabilityDemo = {
+    apiKey: API_KEY,
+    password: DB_PASSWORD,
+    executeCode: processUserCode,
+    setContent: updateContent,
+    queryUser: buildUserQuery
 };
 
-// Usar as funções para que não sejam removidas pelo linter
+// Referência para evitar warning do ESLint  
 // eslint-disable-next-line no-constant-condition
-if (false) {
-    unsafeEval("alert('xss')");
-    unsafeInnerHTML("<script>alert('xss')</script>");
-    unsafeSQLQuery("1' OR '1'='1");
-    hardcodedSecret();
+if (true) {
+    // Vulnerabilidades sempre ativas para CodeQL detectar
+    void vulnerabilityDemo;
 }
 //fim do teste faha codeql
 
