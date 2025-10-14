@@ -6,8 +6,8 @@ interface TaskFormProps {
     onTaskAdded: () => void;
 }
 
-// TESTE PARA FALHAR TYPECHECK
-function TaskForm(props: TaskFormProps) {
+// TESTE PARA FALHAR TYPECHECK - função com erro de tipo mas sem conflito de nome
+function TaskFormWithTypeError(props: TaskFormProps) {
     // Erro proposital: chamando onTaskAdded com argumento inesperado
     props.onTaskAdded("invalid"); // ❌ TypeScript vai reclamar: Expected 0 arguments, but got 1
     return <div>Task Form</div>;
