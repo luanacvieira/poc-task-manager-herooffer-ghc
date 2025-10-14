@@ -28,7 +28,7 @@
     "jest-environment-node": "^29.7.0",
     "mongodb-memory-server": "^9.1.6",
     "nodemon": "^2.0.22",
-    "supertest": "^6.3.3"
+    "supertest": "^7.1.4"
   },
   "keywords": [
     "task",
