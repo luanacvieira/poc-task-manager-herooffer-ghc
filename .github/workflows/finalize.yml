@@ -91,16 +91,22 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          if git show-ref --verify --quiet refs/remotes/origin/badges; then
-            git worktree add _badges_worktree origin/badges
+          
+          # Check if badges branch exists remotely
+          if git ls-remote --heads origin badges | grep -q badges; then
+            echo "✅ Badge branch exists, checking out..."
+            git fetch origin badges:badges || git fetch origin badges
+            git worktree add _badges_worktree badges 2>/dev/null || git worktree add _badges_worktree origin/badges
           else
-            git worktree add -b badges _badges_worktree
-            cd _badges_worktree
+            echo "🆕 Creating new badges branch..."
+            git checkout --orphan badges
             mkdir -p badges/history
             echo '{"schemaVersion":1,"label":"badges","message":"initialized","color":"blue"}' > badges/init.json
-            git add .
-            git commit --allow-empty -m "chore(badges): initialize badges branch"
-            git push -u origin badges || true
+            git add badges/init.json
+            git commit -m "chore(badges): initialize badges branch"
+            git push -u origin badges
+            git checkout ${{ github.ref_name }}
+            git worktree add _badges_worktree badges
           fi
       - name: Generate Coverage Badges
         env:
@@ -139,7 +145,11 @@ jobs:
           git add .
           if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "chore(badges): update coverage badges for ${{ github.ref_name }}"
-            git push origin badges
+            # Try to push, create branch if it doesn't exist
+            git push origin badges 2>/dev/null || git push -u origin badges || {
+              echo "⚠️ Failed to push badges. Trying to force create branch..."
+              git push --force-with-lease -u origin badges
+            }
             echo "✅ Badges atualizados na branch badges"
           else
             echo "⚠️ Nenhuma alteração nos badges"
