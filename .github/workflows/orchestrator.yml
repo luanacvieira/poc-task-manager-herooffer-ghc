@@ -1,0 +1,112 @@
+name: Orchestrator Pipeline
+on:
+  push:
+    branches: [ master, develop, feature/*, feature/**, release/* ]
+  pull_request:
+    branches: [ master, develop ]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  packages: write
+  security-events: write
+  issues: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+env:
+  NODE_VERSION: '20.x'
+  SONAR_PROJECT_KEY: github_poc-task-manager-herooffer-ghc
+  SONAR_ORG: luanagithub
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-quality:
+    name: Code Quality
+    uses: ./.github/workflows/code-quality.yml
+    secrets: inherit
+
+  testing:
+    name: Testing & Coverage
+    needs: [code-quality]
+    uses: ./.github/workflows/testing.yml
+    secrets: inherit
+
+  build:
+    name: Build
+    needs: [testing]
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  security:
+    name: Security Analysis
+    needs: [build]
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+  analysis:
+    name: Code Analysis
+    needs: [build, testing]
+    uses: ./.github/workflows/analysis.yml
+    secrets: inherit
+
+  package:
+    name: Package & Publish
+    needs: [build, security, analysis]
+    uses: ./.github/workflows/package.yml
+    secrets: inherit
+    if: |
+      github.ref == 'refs/heads/master' || 
+      github.ref == 'refs/heads/develop' || 
+      github.ref == 'refs/heads/feature/betterrole-with-tests1-aux' ||
+      (github.event_name == 'pull_request' && (
+        github.event.pull_request.base.ref == 'master' || 
+        github.event.pull_request.base.ref == 'develop'
+      ))
+
+  deploy:
+    name: Deploy
+    needs: [package, security, analysis]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      image_tag: ${{ github.sha }}
+      version: ${{ github.ref_name }}-${{ github.sha }}
+    secrets: inherit
+    if: |
+      github.ref == 'refs/heads/master' || 
+      github.ref == 'refs/heads/develop' || 
+      github.ref == 'refs/heads/feature/betterrole-with-tests1-aux' ||
+      (github.event_name == 'pull_request' && (
+        github.event.pull_request.base.ref == 'master' || 
+        github.event.pull_request.base.ref == 'develop'
+      ))
+
+  finalize:
+    name: Finalize & Report
+    needs: [code-quality, testing, build, security, analysis, package, deploy]
+    uses: ./.github/workflows/finalize.yml
+    with:
+      coverage_avg: ${{ needs.testing.outputs.coverage_avg }}
+      diff_pct: ${{ needs.testing.outputs.diff_pct }}
+      version: ${{ github.ref_name }}-${{ github.sha }}
+    secrets: inherit
+    if: always()
+
+  analytics-dashboard:
+    name: Analytics Dashboard
+    needs: [finalize]
+    uses: ./.github/workflows/analytics-dashboard.yml
+    secrets: inherit
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+
+  badge-smoke-check:
+    name: Badge Verification
+    needs: [analytics-dashboard]
+    uses: ./.github/workflows/badge-smoke-check.yml
+    secrets: inherit
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'

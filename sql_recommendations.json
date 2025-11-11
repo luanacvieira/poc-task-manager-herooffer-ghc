@@ -1,0 +1,26 @@
+[
+  {
+    "type": "projection",
+    "message": "Evitar SELECT * — projetar apenas colunas necessárias reduz I/O."
+  },
+  {
+    "type": "index",
+    "message": "Adicionar índice em (createdAt) ou (createdAt, priority) para acelerar range scan."
+  },
+  {
+    "type": "index",
+    "message": "Índice em (priority) ou índice composto (priority, createdAt) pode ajudar filtro + ordenação."
+  },
+  {
+    "type": "rewrite",
+    "message": "Subquery correlacionada detectada — considerar reescrever com JOIN + GROUP BY."
+  },
+  {
+    "type": "index",
+    "message": "Verificar índice cobrindo a coluna de ORDER BY: (t.createdAt DESC\r\nLIMIT 200)."
+  },
+  {
+    "type": "perf",
+    "message": "LIMIT após ORDER BY — índice adequado pode evitar sort completo."
+  }
+]

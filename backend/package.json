@@ -2,7 +2,7 @@
   "name": "task-manager-backend",
   "version": "1.0.0",
   "description": "Backend for Task Manager application",
-  "main": "src/app.js",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -10,11 +10,17 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
+    "express-rate-limit": "^6.11.2",
     "mongoose": "^7.8.7"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "cross-env": "^7.0.3",
     "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
+    "mongodb-memory-server": "^9.1.6",
     "nodemon": "^2.0.22",
     "supertest": "^6.3.3"
   },

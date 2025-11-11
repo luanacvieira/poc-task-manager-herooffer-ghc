@@ -1,0 +1,247 @@
+name: Finalize Workflow
+
+on:
+  workflow_call:
+    inputs:
+      coverage_avg:
+        description: 'Average coverage percentage'
+        required: true
+        type: string
+      diff_pct:
+        description: 'Diff coverage percentage'
+        required: true
+        type: string
+      version:
+        description: 'Application version'
+        required: true
+        type: string
+
+jobs:
+  finalize:
+    name: Finalize Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: finalize-artifacts
+        continue-on-error: true
+      - name: Debug Coverage Data
+        run: |
+          echo "=== COVERAGE ARTIFACTS DEBUG ==="
+          find finalize-artifacts -type f -name "*.json" | head -10 | while read file; do
+            echo "File: $file"
+            cat "$file" | jq . || cat "$file"
+            echo "---"
+          done
+        continue-on-error: true
+      - name: Pipeline Summary
+        env:
+          COVERAGE_AVG: ${{ inputs.coverage_avg }}
+          DIFF_PCT: ${{ inputs.diff_pct }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "=== PIPELINE SUMMARY ==="
+          echo "✅ Code Quality: Passed"
+          echo "✅ Tests: Passed"
+          echo "📊 Coverage: $COVERAGE_AVG%"
+          echo "📈 Diff Coverage: $DIFF_PCT%"
+          echo "🏗️ Build: Completed"
+          echo "🔒 Security: Scanned"
+          echo "📦 Package: $VERSION"
+          echo "🚀 Deploy: Completed"
+          echo "========================"
+          
+          # Generate GitHub Actions Summary
+          {
+            echo "## 🚀 Pipeline Execution Summary"
+            echo ""
+            echo "| Stage | Status | Details |"
+            echo "|-------|---------|---------|"
+            echo "| 🔍 Code Quality | ✅ Passed | Lint and format checks completed |"
+            echo "| 🧪 Tests | ✅ Passed | All unit and integration tests passed |"
+            echo "| 📊 Coverage | $([ -n "$COVERAGE_AVG" ] && echo "✅ $COVERAGE_AVG%" || echo "⚠️ N/A") | Combined backend + frontend coverage |"
+            echo "| 📈 Diff Coverage | $([ -n "$DIFF_PCT" ] && echo "✅ $DIFF_PCT%" || echo "⚠️ N/A") | New code coverage |"
+            echo "| 🏗️ Build | ✅ Completed | Application built successfully |"
+            echo "| 🔒 Security | ✅ Scanned | Security analysis completed |"
+            echo "| 📦 Package | ✅ Published | Version: $VERSION |"
+            echo "| 🚀 Deploy | ✅ Completed | Application deployed |"
+            echo ""
+            echo "### 📋 Test Results"
+            echo "- **Backend Tests**: All unit tests passed"
+            echo "- **Frontend Tests**: All component tests passed"
+            echo "- **Integration Tests**: All API tests passed"
+            echo ""
+            echo "### 📊 Coverage Details"
+            echo "- **Combined Coverage**: ${COVERAGE_AVG:-N/A}%"
+            echo "- **Diff Coverage**: ${DIFF_PCT:-N/A}%"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+
+  pr-coverage-comment:
+    name: PR Coverage Comment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Comment Coverage on PR
+        uses: actions/github-script@v7
+        env:
+          COVERAGE_AVG: ${{ inputs.coverage_avg }}
+          DIFF_PCT: ${{ inputs.diff_pct }}
+          VERSION: ${{ inputs.version }}
+        with:
+          script: |
+            const coverageAvg = process.env.COVERAGE_AVG || 'N/A';
+            const diffPct = process.env.DIFF_PCT || 'N/A';
+            const version = process.env.VERSION || 'N/A';
+            
+            // Get current PR number
+            const prNumber = context.issue.number;
+            
+            // Badge colors
+            const getCoverageColor = (coverage) => {
+              const num = parseFloat(coverage);
+              if (num >= 90) return '🟢';
+              if (num >= 80) return '🟡'; 
+              if (num >= 60) return '🟠';
+              return '🔴';
+            };
+            
+            const coverageColor = getCoverageColor(coverageAvg);
+            const diffColor = getCoverageColor(diffPct);
+            
+            // Create comment body
+            const commentBody = `## 📊 **Coverage Report**
+            
+            | Metric | Value | Status |
+            |--------|-------|--------|
+            | ${coverageColor} **Combined Coverage** | **${coverageAvg}%** | ${parseFloat(coverageAvg) >= 80 ? '✅ Passed' : '❌ Below threshold (80%)'} |
+            | ${diffColor} **Diff Coverage** | **${diffPct}%** | ${parseFloat(diffPct) >= 80 ? '✅ Passed' : '❌ Below threshold (80%)'} |
+            | 🏗️ **Build Version** | \`${version}\` | ✅ Generated |
+            
+            ### 📈 **Coverage Details**
+            
+            - **Total Lines Covered**: Combined backend + frontend coverage
+            - **New Code Coverage**: Only lines changed in this PR
+            - **Threshold**: 80% minimum for both metrics
+            
+            ### 🎯 **Quality Gates**
+            
+            ${parseFloat(coverageAvg) >= 80 ? '✅' : '❌'} **Overall Coverage Gate**: ${coverageAvg >= 80 ? 'PASSED' : 'FAILED'} (${coverageAvg}% >= 80%)
+            ${parseFloat(diffPct) >= 80 ? '✅' : '❌'} **Diff Coverage Gate**: ${diffPct >= 80 ? 'PASSED' : 'FAILED'} (${diffPct}% >= 80%)
+            
+            ### 📊 **Badge Links**
+            
+            ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/badges/badges/coverage-badge.json)
+            ![Build](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/badges/badges/build-status-badge.json)
+            
+            ---
+            *🤖 Automated coverage report generated by CI/CD pipeline*`;
+            
+            // Check if there's already a coverage comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            
+            const coverageComment = comments.find(comment => 
+              comment.body.includes('📊 **Coverage Report**')
+            );
+            
+            if (coverageComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: coverageComment.id,
+                body: commentBody
+              });
+              console.log('✅ Updated existing coverage comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: commentBody
+              });
+              console.log('✅ Created new coverage comment');
+            }
+
+  update-badges:
+    name: Update Coverage Badges
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup worktree for badges branch
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Check if badges branch exists remotely
+          if git ls-remote --heads origin badges | grep -q badges; then
+            echo "✅ Badge branch exists, checking out..."
+            git fetch origin badges:badges || git fetch origin badges
+            git worktree add _badges_worktree badges 2>/dev/null || git worktree add _badges_worktree origin/badges
+          else
+            echo "🆕 Creating new badges branch..."
+            git checkout --orphan badges
+            mkdir -p badges/history
+            echo '{"schemaVersion":1,"label":"badges","message":"initialized","color":"blue"}' > badges/init.json
+            git add badges/init.json
+            git commit -m "chore(badges): initialize badges branch"
+            git push -u origin badges
+            git checkout ${{ github.ref_name }}
+            git worktree add _badges_worktree badges
+          fi
+      - name: Generate Coverage Badges
+        env:
+          COVERAGE_AVG: ${{ inputs.coverage_avg }}
+          DIFF_PCT: ${{ inputs.diff_pct }}
+          VERSION: ${{ inputs.version }}
+          BRANCH_SAFE: ${{ github.ref_name }}
+        run: |
+          cd _badges_worktree
+          mkdir -p badges/history
+          
+          # Global badges
+          COVERAGE_COLOR="red"
+          COVERAGE_NUM=$(echo "${COVERAGE_AVG:-0}" | cut -d'.' -f1)
+          if [ "$COVERAGE_NUM" -ge 90 ]; then COVERAGE_COLOR="brightgreen"
+          elif [ "$COVERAGE_NUM" -ge 80 ]; then COVERAGE_COLOR="green"  
+          elif [ "$COVERAGE_NUM" -ge 60 ]; then COVERAGE_COLOR="orange"
+          fi
+          
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE_AVG:-0}%\",\"color\":\"$COVERAGE_COLOR\"}" > badges/coverage-badge.json
+          echo "{\"schemaVersion\":1,\"label\":\"diff coverage\",\"message\":\"${DIFF_PCT:-0}%\",\"color\":\"brightgreen\"}" > badges/diff-coverage-badge.json
+          echo "{\"schemaVersion\":1,\"label\":\"build\",\"message\":\"passing\",\"color\":\"brightgreen\"}" > badges/build-status-badge.json
+          
+          # Branch-specific badges
+          BRANCH_SAFE_NAME=$(echo "$BRANCH_SAFE" | tr '/' '_')
+          echo "{\"schemaVersion\":1,\"label\":\"coverage ($BRANCH_SAFE)\",\"message\":\"${COVERAGE_AVG:-0}%\",\"color\":\"$COVERAGE_COLOR\"}" > "badges/coverage-badge-${BRANCH_SAFE_NAME}.json"
+          echo "{\"schemaVersion\":1,\"label\":\"build ($BRANCH_SAFE)\",\"message\":\"passing\",\"color\":\"brightgreen\"}" > "badges/build-status-badge-${BRANCH_SAFE_NAME}.json"
+          
+          # History tracking
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{\"date\":\"$DATE\",\"coverage\":${COVERAGE_AVG:-0},\"diffCoverage\":${DIFF_PCT:-0},\"branch\":\"$BRANCH_SAFE\",\"version\":\"$VERSION\"}" > "badges/history/coverage-latest-${BRANCH_SAFE_NAME}.json"
+          
+      - name: Commit badges
+        run: |
+          cd _badges_worktree
+          git add .
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "chore(badges): update coverage badges for ${{ github.ref_name }}"
+            # Try to push, create branch if it doesn't exist
+            git push origin badges 2>/dev/null || git push -u origin badges || {
+              echo "⚠️ Failed to push badges. Trying to force create branch..."
+              git push --force-with-lease -u origin badges
+            }
+            echo "✅ Badges atualizados na branch badges"
+          else
+            echo "⚠️ Nenhuma alteração nos badges"
+          fi

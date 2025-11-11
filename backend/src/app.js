@@ -1,6 +1,6 @@
-
+// Express app puro (sem side-effects de conexão) para facilitar testes unitários.
 const express = require('express');
-const mongoose = require('mongoose');
+const cors = require('cors');
 const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();

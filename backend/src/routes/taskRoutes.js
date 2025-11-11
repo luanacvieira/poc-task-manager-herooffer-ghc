@@ -1,6 +1,7 @@
 
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const taskController = require('../controllers/taskController');
 
 // GET all tasks with optional filters
