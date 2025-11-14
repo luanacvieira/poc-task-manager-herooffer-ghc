@@ -167,3 +167,4 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+/workspaces/poc-task-manager-herooffer-ghc/mongodb-data/
