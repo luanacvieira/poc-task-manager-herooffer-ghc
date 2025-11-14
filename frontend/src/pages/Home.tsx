@@ -15,15 +15,23 @@ const Home = () => {
 
     useEffect(() => {
         const fetchTasks = async () => {
-            const response = await axios.get('/api/tasks');
-            setTasks(response.data);
+            try {
+                const response = await axios.get('/api/tasks');
+                setTasks(response.data);
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+            }
         };
         fetchTasks();
     }, []);
 
     const deleteTask = async (id: string) => {
-        await axios.delete(`/api/tasks/${id}`);
-        setTasks(tasks.filter(task => task._id !== id));
+        try {
+            await axios.delete(`/api/tasks/${id}`);
+            setTasks(tasks.filter(task => task._id !== id));
+        } catch (error) {
+            console.error('Error deleting task:', error);
+        }
     };
 
     return (

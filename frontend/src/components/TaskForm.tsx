@@ -7,8 +7,14 @@ const TaskForm = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await axios.post('/api/tasks', { title, completed: false, userId: 'user1' });
-        setTitle('');
+        if (!title.trim()) return;
+        
+        try {
+            await axios.post('/api/tasks', { title, completed: false, userId: 'user1' });
+            setTitle('');
+        } catch (error) {
+            console.error('Error adding task:', error);
+        }
     };
 
     return (
