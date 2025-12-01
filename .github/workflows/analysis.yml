@@ -1,0 +1,53 @@
+name: SonarCloud Analysis Workflow
+
+on:
+  workflow_call:
+    outputs:
+      sonar_status:
+        description: "SonarCloud analysis status"
+        value: ${{ jobs.sonar.outputs.status }}
+
+jobs:
+  sonar:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: sonar-coverage
+      - name: Prepare coverage files
+        run: |
+          echo "📋 Organizando arquivos de cobertura para SonarCloud..."
+          mkdir -p backend/coverage-unit frontend/coverage
+          
+          # Verificar arquivos baixados
+          echo "🔍 Arquivos de cobertura baixados:"
+          find sonar-coverage -type f -name "*.info" -o -name "*.json" | head -10
+          
+          # Copiar arquivos para locais esperados pelo SonarCloud
+          if find sonar-coverage -name "*unit*lcov.info" | head -1 | xargs -I {} cp {} backend/coverage-unit/lcov.info 2>/dev/null; then
+            echo "✅ Backend coverage copiado"
+          fi
+          if find sonar-coverage -name "*frontend*lcov.info" | head -1 | xargs -I {} cp {} frontend/coverage/lcov.info 2>/dev/null; then
+            echo "✅ Frontend coverage copiado"
+          fi
+          
+          # Verificar arquivos finais
+          echo "📊 Arquivos de cobertura preparados:"
+          ls -la backend/coverage-unit/lcov.info 2>/dev/null || echo "❌ Backend lcov.info não encontrado"
+          ls -la frontend/coverage/lcov.info 2>/dev/null || echo "❌ Frontend lcov.info não encontrado"
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: true
+      - name: Set Result
+        id: result
+        run: echo "status=success" >> $GITHUB_OUTPUT

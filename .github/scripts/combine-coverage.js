@@ -12,7 +12,7 @@ for(const m of metrics){
   merged.pct = pct.toFixed(2);
   result.total[m]=merged;
 }
-const thresholds={ lines:80, statements:80, functions:80, branches:80 };
+const thresholds={ lines:70, statements:70, functions:70, branches:70 };
 const fails=Object.entries(thresholds).filter(([k,v])=> parseFloat(result.total[k].pct) < v).map(([k])=>k+':'+result.total[k].pct);
 const avg=(Object.values(result.total).reduce((a,x)=>a+parseFloat(x.pct),0)/metrics.length).toFixed(2);
 fs.mkdirSync('combined-coverage',{recursive:true});

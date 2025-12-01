@@ -13,16 +13,26 @@ module.exports = {
     coverageDirectory: 'coverage-unit',
     coverageReporters: ['text', 'lcov', 'html', 'json', 'json-summary'],
     
-    // Arquivos para incluir na cobertura
+    // Arquivos para incluir na cobertura  
     collectCoverageFrom: [
         'src/**/*.js',
-        '!src/app.js', // Excluir arquivo principal
         '!src/server.js', // bootstrap separado não testado em unit
+        '!src/server-dev.js', // servidor de desenvolvimento
+        '!src/mock-server.js', // mock server para testes manuais
+        '!src/vulnerable-code.js', // vulnerabilidades propositais para CodeQL (não testáveis)
         '!**/node_modules/**',
         '!**/tests/**'
     ],
     
-    // Thresholds removidos: enforcement via GitHub Actions
+    // Coverage thresholds - 80% mínimo rigoroso
+    coverageThreshold: {
+        global: {
+            branches: 80,
+            functions: 80,
+            lines: 80,
+            statements: 80
+        }
+    },
     
     // Timeout aumentado
     testTimeout: 10000,
