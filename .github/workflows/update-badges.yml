@@ -15,6 +15,10 @@ on:
 jobs:
   update-badges:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      security-events: read
     steps:
       - name: Checkout badges branch
         uses: actions/checkout@v4

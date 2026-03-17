@@ -91,14 +91,14 @@ jobs:
             --sarif \
             --output semgrep.sarif \
             . || true
-        continue-on-error: true    # não bloqueia o job se semgrep encontrar findings
+        continue-on-error: true    # findings do not fail the job; results are surfaced as annotations only
 
-      - name: Upload Semgrep SARIF (anotações inline no PR)
+      - name: Upload Semgrep SARIF (inline annotations only, not a quality gate)
         uses: github/codeql-action/upload-sarif@v3
         if: always() && hashFiles('semgrep.sarif') != ''
         with:
           sarif_file: semgrep.sarif
-          category: semgrep        # aparece separado do CodeQL na aba Security
+          category: semgrep        # shown separately from CodeQL in the Security tab
       - uses: actions/upload-artifact@v4
         with:
           name: security-artifacts
