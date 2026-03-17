@@ -1,0 +1,17 @@
+[extend]
+# Extend the default gitleaks ruleset
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for GitHub Actions secret references and known false positives"
+
+# ${{ secrets.XYZ }} are GitHub Actions secret references, not hardcoded credentials
+regexes = [
+    '''\$\{\{\s*secrets\.\w+\s*\}\}''',
+]
+
+# Allow specific commits that contain known false positives
+# (historical commits where secrets were only referenced via ${{ secrets.* }})
+commits = [
+    "7be5afbe9425f702bf98436070b01de88cbca08b",
+]
