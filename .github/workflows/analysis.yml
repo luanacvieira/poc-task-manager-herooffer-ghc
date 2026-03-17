@@ -43,7 +43,7 @@ jobs:
           ls -la backend/coverage-unit/lcov.info 2>/dev/null || echo "❌ Backend lcov.info não encontrado"
           ls -la frontend/coverage/lcov.info 2>/dev/null || echo "❌ Frontend lcov.info não encontrado"
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        uses: SonarSource/sonarcloud-scan-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
