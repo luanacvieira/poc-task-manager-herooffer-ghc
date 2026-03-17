@@ -4,47 +4,50 @@
 
 Este documento descreve:
 
-- Como executar todos os testes (backend e frontend) com comandos usando caminho absoluto.
+- Como executar todos os testes (backend e frontend) com comandos relativos ao diretório do repositório.
 - Onde os artefatos de cobertura são gerados.
 - Onde o gate de cobertura de **80%** está referenciado.
 - Diferenças atuais entre o que está documentado e o que está efetivamente aplicado no script combinado.
 
-## 2) Execução local (comandos absolutos)
+## 2) Execução local
 
 ### Backend - Unit
 
 ```powershell
-Set-Location "C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend"
+# a partir da raiz do repositório
+Set-Location .\backend
 npm run test:unit
 ```
 
 Saída de cobertura:
 
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend\coverage-unit\coverage-summary.json`
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend\coverage-unit\lcov.info`
+- `backend\coverage-unit\coverage-summary.json`
+- `backend\coverage-unit\lcov.info`
 
 ### Backend - Integration
 
 ```powershell
-Set-Location "C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend"
+# a partir da raiz do repositório
+Set-Location .\backend
 npm run test:integration
 ```
 
 Saída de cobertura:
 
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend\coverage-integration\`
+- `backend\coverage-integration\`
 
 ### Frontend
 
 ```powershell
-Set-Location "C:\Projetos\Patria\poc-task-manager\poc-task-manager\frontend"
+# a partir da raiz do repositório
+Set-Location .\frontend
 npm test
 ```
 
 Saída de cobertura:
 
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\frontend\coverage\coverage-summary.json`
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\frontend\coverage\lcov.info`
+- `frontend\coverage\coverage-summary.json`
+- `frontend\coverage\lcov.info`
 
 ### Cobertura combinada (backend unit + frontend)
 
