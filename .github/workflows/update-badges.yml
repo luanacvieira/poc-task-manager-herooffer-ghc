@@ -50,8 +50,9 @@ jobs:
         run: |
           BRANCH_SAFE=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g')
           
-          # Get latest workflow run status
+          # Get latest workflow run status for this branch
           STATUS=$(gh api "repos/$GH_REPOSITORY/actions/workflows/orchestrator.yml/runs" \
+            -F branch="$BRANCH_NAME" -F per_page=1 \
             --jq '.workflow_runs[0].conclusion // "unknown"' || echo "unknown")
           
           if [ "$STATUS" = "success" ]; then
