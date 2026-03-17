@@ -51,14 +51,16 @@ Saída de cobertura:
 
 ### Cobertura combinada (backend unit + frontend)
 
-```powershell
-Set-Location "C:\Projetos\Patria\poc-task-manager\poc-task-manager"
-node "C:\Projetos\Patria\poc-task-manager\poc-task-manager\.github\scripts\combine-coverage.js" "C:\Projetos\Patria\poc-task-manager\poc-task-manager\backend\coverage-unit\coverage-summary.json" "C:\Projetos\Patria\poc-task-manager\poc-task-manager\frontend\coverage\coverage-summary.json"
+```bash
+# a partir da raiz do repositório
+node .github/scripts/combine-coverage.js \
+  backend/coverage-unit/coverage-summary.json \
+  frontend/coverage/coverage-summary.json
 ```
 
 Saída:
 
-- `C:\Projetos\Patria\poc-task-manager\poc-task-manager\combined-coverage\coverage-metrics.json`
+- `combined-coverage/coverage-metrics.json`
 
 ## 3) Onde o gate de 80% está referenciado
 
