@@ -49,6 +49,10 @@ jobs:
   security:
     name: Security Scans
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # necessário para upload-sarif (anotações no PR)
+      pull-requests: read
     outputs:
       status: ${{ steps.result.outputs.status }}
     steps:
@@ -74,6 +78,7 @@ jobs:
           if [ -f backend/package.json ]; then (cd backend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
           if [ -f frontend/package.json ]; then (cd frontend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
       - name: Semgrep
+        id: semgrep
         uses: semgrep/semgrep-action@v1
         with:
           config: >-
@@ -85,6 +90,15 @@ jobs:
             p/javascript
             p/typescript
             p/react
+          generateSarif: "1"
+        continue-on-error: true    # não bloqueia o job; o gate fica no upload-sarif
+
+      - name: Upload Semgrep SARIF (anotações inline no PR)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()               # roda mesmo se o semgrep encontrar findings
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep        # aparece separado do CodeQL na aba Security
       - uses: actions/upload-artifact@v4
         with:
           name: security-artifacts
