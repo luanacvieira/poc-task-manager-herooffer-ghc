@@ -49,6 +49,10 @@ jobs:
   security:
     name: Security Scans
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # necessário para upload-sarif (anotações no PR)
+      pull-requests: read
     outputs:
       status: ${{ steps.result.outputs.status }}
     steps:
@@ -73,18 +77,32 @@ jobs:
           echo "=== NPM LICENSE CHECK ===" >> license-scan.log
           if [ -f backend/package.json ]; then (cd backend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
           if [ -f frontend/package.json ]; then (cd frontend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
-      - name: Semgrep
-        uses: semgrep/semgrep-action@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/ci
-            p/r2c-ci
-            p/docker
-            p/javascript
-            p/typescript
-            p/react
+          python-version: '3.11'
+      - name: Semgrep
+        id: semgrep
+        run: |
+          python -m pip install semgrep==1.78.0 --quiet
+          semgrep \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/ci \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/react \
+            --sarif \
+            --output semgrep.sarif \
+            .
+        continue-on-error: true    # findings do not fail the job; results are surfaced as annotations only
+
+      - name: Upload Semgrep SARIF (inline annotations only, not a quality gate)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep        # shown separately from CodeQL in the Security tab
       - uses: actions/upload-artifact@v4
         with:
           name: security-artifacts

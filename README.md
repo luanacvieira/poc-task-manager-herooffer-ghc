@@ -24,6 +24,16 @@
 
 Os badges são publicados na branch `badges` em `badges/*.json` e `badges/history/*.json`. Cada branch gera seus próprios arquivos sanitizados (`coverage-badge-<safeBranch>.json`).
 
+### Governança & Automação
+
+| Recurso | Arquivo | Status |
+|---------|---------|--------|
+| Revisores obrigatórios | `.github/CODEOWNERS` | ✅ Configurado |
+| Atualizações automáticas de deps | `.github/dependabot.yml` | ✅ Ativo (semanal, segunda-feira) |
+| Auto-merge minor/patch | `.github/workflows/dependabot-auto-merge.yml` | ✅ Ativo |
+| Template de Pull Request | `.github/pull_request_template.md` | ✅ Ativo |
+| Labels automáticos em PRs | `.github/labeler.yml` | ✅ Configurado |
+
 ## Estratégia de Testes
 
 Camadas adotadas para máxima cobertura e manutenção simples:
