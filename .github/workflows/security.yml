@@ -77,10 +77,14 @@ jobs:
           echo "=== NPM LICENSE CHECK ===" >> license-scan.log
           if [ -f backend/package.json ]; then (cd backend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
           if [ -f frontend/package.json ]; then (cd frontend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Semgrep
         id: semgrep
         run: |
-          pip install semgrep --quiet
+          python -m pip install semgrep==1.78.0 --quiet
           semgrep \
             --config p/security-audit \
             --config p/secrets \
