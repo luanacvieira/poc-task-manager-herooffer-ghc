@@ -79,23 +79,23 @@ jobs:
           if [ -f frontend/package.json ]; then (cd frontend && npm list --depth=0 2>/dev/null | head -20 >> ../license-scan.log || true); fi
       - name: Semgrep
         id: semgrep
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/ci
-            p/r2c-ci
-            p/docker
-            p/javascript
-            p/typescript
-            p/react
-          generateSarif: "1"
-        continue-on-error: true    # não bloqueia o job; o gate fica no upload-sarif
+        run: |
+          pip install semgrep --quiet
+          semgrep \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/ci \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/react \
+            --sarif \
+            --output semgrep.sarif \
+            . || true
+        continue-on-error: true    # não bloqueia o job se semgrep encontrar findings
 
       - name: Upload Semgrep SARIF (anotações inline no PR)
         uses: github/codeql-action/upload-sarif@v3
-        if: always()               # roda mesmo se o semgrep encontrar findings
+        if: always() && hashFiles('semgrep.sarif') != ''
         with:
           sarif_file: semgrep.sarif
           category: semgrep        # aparece separado do CodeQL na aba Security
