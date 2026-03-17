@@ -25,20 +25,26 @@ jobs:
 
       - name: Get branch name
         id: branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "name=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "name=$HEAD_REF" >> $GITHUB_OUTPUT
           else
             echo "name=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
           fi
 
       - name: Update build status badge
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="${{ steps.branch.outputs.name }}"
           BRANCH_SAFE=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g')
           
           # Get latest workflow run status
-          STATUS=$(gh api repos/${{ github.repository }}/actions/workflows/orchestrator.yml/runs \
+          STATUS=$(gh api "repos/$GH_REPOSITORY/actions/workflows/orchestrator.yml/runs" \
             --jq '.workflow_runs[0].conclusion // "unknown"' || echo "unknown")
           
           if [ "$STATUS" = "success" ]; then
@@ -62,12 +68,10 @@ jobs:
             "color": "$COLOR"
           }
           EOF
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Update coverage badges
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
         run: |
-          BRANCH_NAME="${{ steps.branch.outputs.name }}"
           BRANCH_SAFE=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g')
           
           # Try to get coverage from different sources
@@ -124,12 +128,15 @@ jobs:
           EOF
 
       - name: Update security badges
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="${{ steps.branch.outputs.name }}"
           BRANCH_SAFE=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g')
           
           # Get CodeQL alerts count
-          ALERTS=$(gh api repos/${{ github.repository }}/code-scanning/alerts \
+          ALERTS=$(gh api "repos/$GH_REPOSITORY/code-scanning/alerts" \
             --jq 'length' 2>/dev/null || echo "0")
           
           if [ "$ALERTS" = "0" ]; then
@@ -148,10 +155,11 @@ jobs:
             "color": "$SECURITY_COLOR"
           }
           EOF
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Update badge history
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           mkdir -p badges/history
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -159,13 +167,15 @@ jobs:
           cat > "badges/history/update-${TIMESTAMP}.json" << EOF
           {
             "timestamp": "$TIMESTAMP",
-            "branch": "${{ steps.branch.outputs.name }}",
-            "trigger": "${{ github.event_name }}",
-            "workflow_run_id": "${{ github.run_id }}"
+            "branch": "$BRANCH_NAME",
+            "trigger": "$EVENT_NAME",
+            "workflow_run_id": "$RUN_ID"
           }
           EOF
 
       - name: Commit and push badges
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -175,6 +185,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "🔄 Update badges for ${{ steps.branch.outputs.name }} - $(date)"
+            git commit -m "🔄 Update badges for $BRANCH_NAME - $(date)"
             git push origin badges
           fi
