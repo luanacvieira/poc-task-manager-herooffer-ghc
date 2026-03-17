@@ -1,61 +1,71 @@
-require('dotenv').config();
+const express = require('express');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
-const app = require('./app');
+const taskRoutes = require('./routes/taskRoutes');
 
-const PORT = process.env.PORT || 3001;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/poc_task_manager';
-const USE_FALLBACK = process.env.USE_FALLBACK !== 'false';
+const app = express();
 
-let mongoServer;
+// Healthcheck endpoint
+app.get('/healthcheck', (req, res) => {
+    res.status(200).json({ 
+        message: 'API funcionando corretamente',
+        timestamp: new Date().toISOString(),
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
 
-async function start() {
+// CORS middleware
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+});
+
+// Middleware
+app.use(express.json());
+app.use('/api', taskRoutes);
+
+// Connect to MongoDB and start server
+const startServer = async () => {
     try {
-        // Tentar conectar ao MongoDB local primeiro
-        console.log('🔄 Tentando conectar ao MongoDB local...');
-        await mongoose.connect(MONGO_URI, { 
-            serverSelectionTimeoutMS: 3000 // Timeout rápido para falhar rapidamente
+        await mongoose.connect('mongodb://localhost:27017/taskdb');
+        console.log('✓ Connected to MongoDB');
+        
+        const PORT = 3001;
+        const server = app.listen(PORT, '0.0.0.0', () => {
+            console.log(`✓ Server running on http://localhost:${PORT}`);
+            console.log('✓ Available routes:');
+            console.log('  GET  /healthcheck');
+            console.log('  GET  /api/tasks');
+            console.log('  POST /api/tasks');
+            console.log('  PUT  /api/tasks/:id');
+            console.log('  PATCH /api/tasks/:id/toggle');
+            console.log('  DELETE /api/tasks/:id');
+            console.log('\n✓ Server is ready to accept connections\n');
         });
-        console.log('✅ Conectado ao MongoDB local:', MONGO_URI);
-        
-    } catch (err) {
-        console.log('❌ Falha na conexão MongoDB local:', err.message);
-        
-        if (USE_FALLBACK) {
-            console.log('🧠 Iniciando MongoDB em memória como fallback...');
-            try {
-                mongoServer = await MongoMemoryServer.create();
-                const memoryUri = mongoServer.getUri();
-                await mongoose.connect(memoryUri, {});
-                console.log('✅ Conectado ao MongoDB em memória:', memoryUri);
-            } catch (memoryErr) {
-                console.error('❌ Falha no MongoDB em memória:', memoryErr);
+
+        server.on('error', (err) => {
+            console.error('✗ Server error:', err);
+            if (err.code === 'EADDRINUSE') {
+                console.error(`✗ Port ${PORT} is already in use`);
                 process.exit(1);
             }
-        } else {
-            console.error('❌ Não foi possível conectar ao MongoDB e fallback está desabilitado');
-            process.exit(1);
-        }
+        });
+
+    } catch (err) {
+        console.error('✗ Failed to start server:', err);
+        process.exit(1);
     }
+};
 
-    const server = app.listen(PORT, () => {
-        console.log(`🚀 Servidor rodando na porta ${PORT}`);
-        console.log(`📍 API disponível em: http://localhost:${PORT}/api/tasks`);
-        console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-    });
-    
-    server.on('error', (err) => console.error('❌ Erro do servidor:', err));
-}
-
-// Global process handlers (uma vez só aqui)
+// Handle unhandled rejections
 process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err);
-    process.exit(1);
+    console.error('✗ Unhandled Rejection:', err);
 });
 
+// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
+    console.error('✗ Uncaught Exception:', err);
 });
 
-start();
+startServer();
