@@ -1,0 +1,679 @@
+name: 🗂️ Populate Project Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm issue creation (avoids accidental duplicate runs)'
+        required: true
+        default: 'no'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-labels:
+    name: 🏷️ Create Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const labels = [
+              // Types
+              { name: 'epic',          color: '8B2BE2', description: 'Epic – large feature or initiative' },
+              { name: 'story',         color: '0075CA', description: 'User Story – value from the user perspective' },
+              { name: 'task',          color: 'E4E669', description: 'Task – concrete unit of work' },
+              { name: 'spike',         color: 'D4C5F9', description: 'Spike – research or investigation' },
+              // Domains
+              { name: 'test-suite',    color: '0E8A16', description: 'Related to test suite creation/maintenance' },
+              { name: 'quality-gate',  color: 'B60205', description: 'Coverage or quality gate validation' },
+              { name: 'po-approval',   color: 'F9D0C4', description: 'Requires Product Owner approval/sign-off' },
+              { name: 'ci-cd',         color: 'BFD4F2', description: 'CI/CD pipeline related' },
+              { name: 'backend',       color: 'C5DEF5', description: 'Backend scope' },
+              { name: 'frontend',      color: 'FEF2C0', description: 'Frontend scope' },
+              // Priorities
+              { name: 'priority:high',     color: 'B60205', description: 'High priority' },
+              { name: 'priority:medium',   color: 'FBCA04', description: 'Medium priority' },
+              { name: 'priority:low',      color: '0E8A16', description: 'Low priority' },
+              // Status
+              { name: 'status:ready',       color: '0E8A16', description: 'Ready for development' },
+              { name: 'status:in-progress', color: 'FBCA04', description: 'Currently being worked on' },
+              { name: 'status:blocked',     color: 'B60205', description: 'Blocked – waiting for dependency' },
+              { name: 'status:review',      color: '006B75', description: 'In review / awaiting approval' },
+              { name: 'status:done',        color: '0E8A16', description: 'Completed and accepted' },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description,
+                });
+                console.log(`✅ Created label: ${label.name}`);
+              } catch (err) {
+                if (err.status === 422) {
+                  console.log(`⚠️  Label already exists: ${label.name}`);
+                } else {
+                  throw err;
+                }
+              }
+            }
+
+  create-milestone:
+    name: 🎯 Create Milestone
+    runs-on: ubuntu-latest
+    outputs:
+      milestone_id: ${{ steps.create.outputs.milestone_id }}
+    steps:
+      - name: Create milestone
+        id: create
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const milestones = [
+              {
+                title: 'Sprint 01 – Suite de Testes',
+                description: 'Criação, execução e validação da suite de testes + aprovação dos POs.',
+                due_on: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+              }
+            ];
+
+            let milestoneId = null;
+            for (const ms of milestones) {
+              try {
+                const res = await github.rest.issues.createMilestone({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: ms.title,
+                  description: ms.description,
+                  due_on: ms.due_on,
+                });
+                milestoneId = res.data.number;
+                console.log(`✅ Created milestone #${milestoneId}: ${ms.title}`);
+              } catch (err) {
+                if (err.status === 422) {
+                  // Already exists – fetch it
+                  const existing = await github.rest.issues.listMilestones({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    state: 'open',
+                  });
+                  const found = existing.data.find(m => m.title === ms.title);
+                  if (found) {
+                    milestoneId = found.number;
+                    console.log(`⚠️  Milestone already exists: #${milestoneId} ${ms.title}`);
+                  }
+                } else {
+                  throw err;
+                }
+              }
+            }
+            core.setOutput('milestone_id', milestoneId);
+
+  create-issues:
+    name: 📋 Create Issues
+    runs-on: ubuntu-latest
+    needs: [create-labels, create-milestone]
+    steps:
+      - name: Create all issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const milestoneId = parseInt('${{ needs.create-milestone.outputs.milestone_id }}', 10) || undefined;
+
+            // ──────────────────────────────────────────────
+            // EPIC 1 – Criação da Suite de Testes
+            // ──────────────────────────────────────────────
+            const epic1 = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[EPIC] Criação da Suite de Testes',
+              labels: ['epic', 'test-suite', 'priority:high'],
+              milestone: milestoneId,
+              body: `## 🎯 Objetivo
+            Definir, estruturar e implementar todas as camadas da suite de testes do projeto **poc-task-manager-herooffer-ghc**.
+
+            ## 📋 Escopo
+            - Testes unitários (backend + frontend)
+            - Testes de integração (backend com MongoDB in-memory)
+            - Testes de rotas Express
+            - Coverage gate ≥ 80% em todas as métricas
+            - Configuração do SonarCloud
+
+            ## ✅ Definition of Done
+            - [ ] Todas as tasks filhas concluídas
+            - [ ] Cobertura ≥ 80% (lines, branches, functions, statements)
+            - [ ] Pipeline CI/CD verde
+            - [ ] Aprovação do PO
+
+            ## 🔗 Tasks relacionadas
+            _As tasks serão vinculadas abaixo conforme criadas._
+            `,
+            });
+            console.log(`✅ Created EPIC 1: #${epic1.data.number}`);
+
+            const epic1Number = epic1.data.number;
+
+            // ──────────────────────────────────────────────
+            // TASKS – Epic 1
+            // ──────────────────────────────────────────────
+            const tasks1 = [
+              {
+                title: '[TASK] Planejamento e definição da arquitetura de testes',
+                labels: ['task', 'test-suite', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Mapear os módulos existentes (controllers, models, routes, componentes React) e definir a estratégia de testes para cada camada.
+
+            ## Critérios de Aceite
+            - [ ] Diagrama/documento com as camadas de teste definidas (unit, integration, e2e)
+            - [ ] Ferramentas escolhidas (Jest, Supertest, RTL, mongodb-memory-server)
+            - [ ] Metas de cobertura por módulo documentadas
+            - [ ] Aprovação do Tech Lead
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes unitários – Backend: Model',
+                labels: ['task', 'test-suite', 'backend', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes unitários para o modelo Mongoose (\`Task\`) cobrindo validações, campos obrigatórios e defaults.
+
+            ## Critérios de Aceite
+            - [ ] Testes para todos os campos do schema (\`title\`, \`description\`, \`status\`, \`tags\`, \`dueDate\`)
+            - [ ] Cobertura do model ≥ 95%
+            - [ ] Testes passando no CI
+            - [ ] \`npm run test:unit\` verde
+
+            ## Implementação
+            \`\`\`
+            backend/tests/unit/models/task.model.test.js
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes unitários – Backend: Controller',
+                labels: ['task', 'test-suite', 'backend', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes unitários para o TaskController cobrindo todos os métodos (create, list, update, delete, getById) com mocks do Model.
+
+            ## Critérios de Aceite
+            - [ ] Testes para todos os métodos do controller
+            - [ ] Branches de erro cobertos (status 404, 500)
+            - [ ] Cobertura do controller ≥ 90%
+            - [ ] Logs e respostas HTTP validados
+
+            ## Implementação
+            \`\`\`
+            backend/tests/unit/controllers/task.controller.test.js (isolated)
+            backend/tests/actual/controllers/task.controller.actual.test.js
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes de Rotas – Backend: Express Routes',
+                labels: ['task', 'test-suite', 'backend', 'priority:medium', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes de rotas usando Supertest para verificar os endpoints (\`GET /tasks\`, \`POST /tasks\`, \`PUT /tasks/:id\`, \`DELETE /tasks/:id\`).
+
+            ## Critérios de Aceite
+            - [ ] Todos os endpoints mapeados e testados
+            - [ ] Respostas HTTP validadas (200, 201, 404, 500)
+            - [ ] Headers e payloads verificados
+            - [ ] Controllers mockados corretamente
+
+            ## Implementação
+            \`\`\`
+            backend/tests/routes/task.routes.test.js
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes de Integração – Backend (MongoDB in-memory)',
+                labels: ['task', 'test-suite', 'backend', 'priority:medium', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes de integração usando \`mongodb-memory-server\` para validar o pipeline CRUD completo (criar, listar, atualizar, deletar) com Mongoose real.
+
+            ## Critérios de Aceite
+            - [ ] Setup/teardown do MongoDB in-memory configurado
+            - [ ] CRUD completo testado
+            - [ ] Validações de schema testadas em integração
+            - [ ] Testes isolados (sem side effects)
+            - [ ] \`npm run test:integration\` verde
+
+            ## Implementação
+            \`\`\`
+            backend/tests/integration/task.integration.test.js
+            jest.config.integration.js
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes unitários – Frontend: TaskForm',
+                labels: ['task', 'test-suite', 'frontend', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes para o componente \`TaskForm\` usando React Testing Library + user-event.
+
+            ## Critérios de Aceite
+            - [ ] Validação de campos obrigatórios
+            - [ ] Transformação de tags (string → array)
+            - [ ] Reset de estado após submit
+            - [ ] Estado de loading no botão
+            - [ ] Exibição de erros de validação
+            - [ ] Cobertura do componente ≥ 90%
+
+            ## Implementação
+            \`\`\`
+            frontend/src/components/__tests__/TaskForm.test.tsx
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Implementar testes unitários – Frontend: Home/TaskList',
+                labels: ['task', 'test-suite', 'frontend', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Criar testes para a página \`Home\` e listagem de tasks usando React Testing Library.
+
+            ## Critérios de Aceite
+            - [ ] Carregamento de tasks da API mockada
+            - [ ] Estado de loading e erro
+            - [ ] Toggle de conclusão de task
+            - [ ] Deleção de task
+            - [ ] Renderização de metadados e tags
+            - [ ] Cobertura ≥ 90%
+
+            ## Implementação
+            \`\`\`
+            frontend/src/pages/__tests__/Home.test.tsx
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+              {
+                title: '[TASK] Configurar Coverage Gate e relatórios de cobertura',
+                labels: ['task', 'test-suite', 'quality-gate', 'ci-cd', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Garantir que o coverage gate esteja configurado corretamente no CI/CD, bloqueando merges quando a cobertura cair abaixo de 80%.
+
+            ## Critérios de Aceite
+            - [ ] Coverage gate ≥ 80% para lines, branches, functions e statements
+            - [ ] Relatório de coverage combinado (backend + frontend) gerado
+            - [ ] Badges de coverage atualizados automaticamente na branch \`badges\`
+            - [ ] Histórico de coverage salvo
+            - [ ] Branch protection rule configurada
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+            ];
+
+            for (const t of tasks1) {
+              const r = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: t.title,
+                labels: t.labels,
+                milestone: milestoneId,
+                body: t.body,
+              });
+              console.log(`✅ Created TASK (Epic 1): #${r.data.number} – ${t.title}`);
+            }
+
+            // ──────────────────────────────────────────────
+            // EPIC 2 – Execução e Validação das Suites de Testes
+            // ──────────────────────────────────────────────
+            const epic2 = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[EPIC] Execução e Validação das Suites de Testes',
+              labels: ['epic', 'test-suite', 'quality-gate', 'priority:high'],
+              milestone: milestoneId,
+              body: `## 🎯 Objetivo
+            Executar todas as suites de testes criadas, validar os resultados, analisar cobertura e garantir que todos os quality gates estejam passando antes de avançar para aprovação dos POs.
+
+            ## 📋 Escopo
+            - Execução de testes unitários (backend e frontend)
+            - Execução de testes de integração
+            - Análise de relatórios de cobertura
+            - Validação do quality gate no SonarCloud
+            - Revisão e correção de falhas
+
+            ## ✅ Definition of Done
+            - [ ] 100% dos testes passando
+            - [ ] Cobertura ≥ 80% em todas as métricas
+            - [ ] SonarCloud: Quality Gate PASSED
+            - [ ] CodeQL: sem alertas críticos
+            - [ ] Relatório final documentado
+
+            ## 🔗 Depends on
+            Depends on Epic #${epic1Number}
+            `,
+            });
+            console.log(`✅ Created EPIC 2: #${epic2.data.number}`);
+
+            const epic2Number = epic2.data.number;
+
+            const tasks2 = [
+              {
+                title: '[TASK] Executar suite de testes unitários e validar cobertura',
+                labels: ['task', 'test-suite', 'quality-gate', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Executar \`npm run test:unit\` (backend) e \`npm test\` (frontend), analisar o relatório de cobertura e garantir que o gate ≥ 80% seja atingido.
+
+            ## Critérios de Aceite
+            - [ ] \`npm run test:unit\` passa sem erros
+            - [ ] Frontend tests passam sem erros
+            - [ ] Lines ≥ 80%, Branches ≥ 80%, Functions ≥ 80%, Statements ≥ 80%
+            - [ ] Relatório de cobertura exportado como artefato no CI
+
+            ## Comandos
+            \`\`\`bash
+            # Backend
+            cd backend && npm run test:unit
+
+            # Frontend
+            cd frontend && npm test -- --watchAll=false --coverage
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+              {
+                title: '[TASK] Executar suite de testes de integração',
+                labels: ['task', 'test-suite', 'backend', 'priority:medium', 'status:ready'],
+                body: `## 📝 Descrição
+            Executar os testes de integração com MongoDB in-memory e validar o pipeline CRUD completo.
+
+            ## Critérios de Aceite
+            - [ ] \`npm run test:integration\` passa sem erros
+            - [ ] Todos os cenários CRUD validados
+            - [ ] Sem side effects em outros testes
+            - [ ] Tempo de execução dentro do limite do CI
+
+            ## Comandos
+            \`\`\`bash
+            cd backend && npm run test:integration
+            \`\`\`
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+              {
+                title: '[TASK] Análise e revisão de falhas de teste',
+                labels: ['task', 'test-suite', 'quality-gate', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Analisar os logs de CI, identificar testes falhando ou com cobertura insuficiente e aplicar as correções necessárias.
+
+            ## Critérios de Aceite
+            - [ ] Todos os testes com falha identificados e documentados
+            - [ ] Root cause de cada falha analisado
+            - [ ] Correções aplicadas
+            - [ ] Nenhum teste ignorado (no \`xtest\` ou \`skip\` sem justificativa)
+            - [ ] Regressão verificada
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+              {
+                title: '[TASK] Validação do Quality Gate no SonarCloud',
+                labels: ['task', 'quality-gate', 'ci-cd', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Verificar o resultado da análise SonarCloud e garantir que todos os quality gates (bugs, vulnerabilidades, code smells, coverage) estejam aprovados.
+
+            ## Critérios de Aceite
+            - [ ] Quality Gate: **PASSED**
+            - [ ] Bugs: 0 novos
+            - [ ] Vulnerabilidades: 0 novas
+            - [ ] Code Smells: dentro do threshold
+            - [ ] Coverage ≥ 80% no Sonar
+            - [ ] Reliability Rating: A
+            - [ ] Security Rating: A
+            - [ ] Maintainability Rating: A
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+              {
+                title: '[TASK] Validação de Segurança – CodeQL e Semgrep',
+                labels: ['task', 'quality-gate', 'ci-cd', 'priority:high', 'status:ready'],
+                body: `## 📝 Descrição
+            Verificar os resultados das análises SAST (CodeQL e Semgrep) e garantir que não há alertas críticos ou de alta severidade.
+
+            ## Critérios de Aceite
+            - [ ] CodeQL: nenhum alerta crítico/alto
+            - [ ] Semgrep: nenhum alerta ERROR
+            - [ ] SARIF publicado no GitHub Security tab
+            - [ ] Dependências verificadas pelo Dependabot
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+              {
+                title: '[TASK] Gerar relatório final de resultados de testes',
+                labels: ['task', 'test-suite', 'quality-gate', 'priority:medium', 'status:ready'],
+                body: `## 📝 Descrição
+            Consolidar todos os resultados de testes, cobertura e análises de qualidade em um relatório final para apresentação aos POs.
+
+            ## Critérios de Aceite
+            - [ ] Relatório com métricas de cobertura (backend + frontend)
+            - [ ] Resultado do SonarCloud incluído
+            - [ ] Status do CodeQL/Semgrep incluído
+            - [ ] Histórico de cobertura incluído (\`coverage-history.html\`)
+            - [ ] Relatório aprovado pelo Tech Lead antes de enviar para PO
+
+            ## 🔗 Epic
+            Relates to #${epic2Number}
+            `,
+              },
+            ];
+
+            for (const t of tasks2) {
+              const r = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: t.title,
+                labels: t.labels,
+                milestone: milestoneId,
+                body: t.body,
+              });
+              console.log(`✅ Created TASK (Epic 2): #${r.data.number} – ${t.title}`);
+            }
+
+            // ──────────────────────────────────────────────
+            // EPIC 3 – Aprovações dos POs
+            // ──────────────────────────────────────────────
+            const epic3 = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[EPIC] Aprovações dos POs (Product Owners)',
+              labels: ['epic', 'po-approval', 'priority:high'],
+              milestone: milestoneId,
+              body: `## 🎯 Objetivo
+            Garantir que os Product Owners revisem, validem e aprovem os artefatos de qualidade e as suites de testes entregues pela equipe de desenvolvimento.
+
+            ## 📋 Escopo
+            - Review dos critérios de aceite definidos para cada suite de testes
+            - Aprovação da cobertura mínima ≥ 80%
+            - Sign-off do pipeline CI/CD completo
+            - Aprovação final antes do release
+
+            ## ✅ Definition of Done
+            - [ ] Todos os itens de aprovação concluídos e documentados
+            - [ ] POs assinaram o termo de aceite
+            - [ ] Release autorizado
+
+            ## 🔗 Depends on
+            Depends on Epic #${epic1Number} and Epic #${epic2Number}
+            `,
+            });
+            console.log(`✅ Created EPIC 3: #${epic3.data.number}`);
+
+            const epic3Number = epic3.data.number;
+
+            const tasks3 = [
+              {
+                title: '[STORY] PO Review – Critérios de Aceite das Suites de Testes',
+                labels: ['story', 'po-approval', 'priority:high', 'status:ready'],
+                body: `## 📖 História
+            **Como** Product Owner,
+            **Quero** revisar e aprovar os critérios de aceite definidos para cada suite de testes,
+            **Para que** eu tenha certeza de que os testes cobrem todos os requisitos de negócio.
+
+            ## Critérios de Aceite
+            - [ ] PO revisou os critérios de aceite de cada task de teste
+            - [ ] Critérios de negócio mapeados para casos de teste específicos
+            - [ ] Lacunas identificadas e documentadas
+            - [ ] PO aprova os critérios de aceite ✅
+
+            ## Informações para o PO
+            - Consultar issues das Tasks de criação de testes
+            - Verificar que os testes cobrem os fluxos: criar task, listar, atualizar, deletar
+            - Verificar cenários de erro (task não encontrada, dados inválidos)
+
+            ## 🔗 Epic
+            Relates to #${epic3Number}
+            `,
+              },
+              {
+                title: '[STORY] PO Review – Aprovação da Cobertura Mínima (≥80%)',
+                labels: ['story', 'po-approval', 'quality-gate', 'priority:high', 'status:ready'],
+                body: `## 📖 História
+            **Como** Product Owner,
+            **Quero** revisar o relatório de cobertura de testes e confirmar que a meta de ≥ 80% foi atingida,
+            **Para que** eu tenha confiança na qualidade e estabilidade do código entregue.
+
+            ## Critérios de Aceite
+            - [ ] Relatório de cobertura apresentado ao PO
+            - [ ] Lines ≥ 80% ✅
+            - [ ] Branches ≥ 80% ✅
+            - [ ] Functions ≥ 80% ✅
+            - [ ] Statements ≥ 80% ✅
+            - [ ] PO valida os números e aprova ✅
+
+            ## Documentos de referência
+            - Badge de coverage no README
+            - Artefato \`coverage-report\` do workflow CI
+            - \`coverage-history.html\` com histórico
+
+            ## 🔗 Epic
+            Relates to #${epic3Number}
+            `,
+              },
+              {
+                title: '[STORY] PO Review – Aprovação do Pipeline CI/CD Completo',
+                labels: ['story', 'po-approval', 'ci-cd', 'priority:high', 'status:ready'],
+                body: `## 📖 História
+            **Como** Product Owner,
+            **Quero** revisar o status do pipeline CI/CD (lint, testes, build, análise de segurança e qualidade),
+            **Para que** eu tenha visibilidade completa sobre o processo de entrega e possa autorizar o avanço para produção.
+
+            ## Critérios de Aceite
+            - [ ] PO revisou o fluxo do pipeline (diagrama do orquestrador)
+            - [ ] Todos os jobs do CI/CD passando: ✅ lint → typecheck → test → coverage-gate → build → codeql → sonar → finalize
+            - [ ] Quality Gate SonarCloud: PASSED ✅
+            - [ ] Nenhum alerta crítico no CodeQL ✅
+            - [ ] Badges do README atualizados e refletindo estado atual ✅
+            - [ ] PO aprova o pipeline ✅
+
+            ## 🔗 Epic
+            Relates to #${epic3Number}
+            `,
+              },
+              {
+                title: '[STORY] PO Sign-off Final – Autorização de Release',
+                labels: ['story', 'po-approval', 'priority:high', 'status:ready'],
+                body: `## 📖 História
+            **Como** Product Owner,
+            **Quero** realizar o sign-off formal da entrega (suites de testes + qualidade aprovada),
+            **Para que** a equipe possa avançar para o release / próximo sprint com a devida autorização.
+
+            ## Critérios de Aceite
+            - [ ] Todos os épicos anteriores concluídos (#${epic1Number}, #${epic2Number})
+            - [ ] Relatório final apresentado e revisado
+            - [ ] PO assinou o termo de aceite da Sprint 01 ✅
+            - [ ] Release Notes documentadas
+            - [ ] Branch \`main\` protegida com todos os checks passando
+            - [ ] Autorização formal registrada nesta issue ✅
+
+            ## Checklist de Revisão Final
+            - [ ] Funcionalidades testadas conforme AC
+            - [ ] Nenhuma regressão identificada
+            - [ ] Documentação atualizada (README, badges)
+            - [ ] Segurança validada (CodeQL + Semgrep + Dependabot)
+            - [ ] Performance aceitável
+
+            ## 🔗 Epic
+            Relates to #${epic3Number}
+            `,
+              },
+              {
+                title: '[SPIKE] Investigar ferramentas de testes E2E (Playwright / Cypress)',
+                labels: ['spike', 'test-suite', 'priority:low', 'status:ready'],
+                body: `## 📝 Objetivo
+            Pesquisar e avaliar as opções de ferramentas E2E (Playwright vs Cypress) para futura implementação de testes end-to-end no projeto.
+
+            ## Entregáveis
+            - [ ] Comparativo Playwright vs Cypress (setup, manutenibilidade, CI integration)
+            - [ ] PoC mínima com a ferramenta escolhida
+            - [ ] Estimativa de esforço para implementação completa
+            - [ ] Recomendação documentada
+
+            ## Time-box
+            4 horas
+
+            ## 🔗 Epic
+            Relates to #${epic1Number}
+            `,
+              },
+            ];
+
+            for (const t of tasks3) {
+              const r = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: t.title,
+                labels: t.labels,
+                milestone: milestoneId,
+                body: t.body,
+              });
+              console.log(`✅ Created STORY/SPIKE (Epic 3): #${r.data.number} – ${t.title}`);
+            }
+
+            console.log('\n🎉 All issues created successfully!');
+            console.log(`📌 Milestone: Sprint 01 – Suite de Testes (#${milestoneId})`);
+            console.log(`📌 Epic 1 (Test Suite Creation): #${epic1Number}`);
+            console.log(`📌 Epic 2 (Test Execution & Validation): #${epic2Number}`);
+            console.log(`📌 Epic 3 (PO Approvals): #${epic3Number}`);
