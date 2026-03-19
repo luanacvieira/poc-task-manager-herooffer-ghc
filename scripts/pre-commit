@@ -1,0 +1,107 @@
+#!/bin/sh
+# =============================================================================
+# pre-commit hook — Detector de Dados Sensíveis
+# Workshop: Tratamento de Credenciais com GitHub Copilot
+#
+# Este hook roda LOCALMENTE antes de cada commit e bloqueia se encontrar
+# padrões de tokens/credenciais hardcoded nos arquivos staged.
+#
+# Instalação:
+#   cp scripts/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+# =============================================================================
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+echo "🔍 [pre-commit] Verificando dados sensíveis nos arquivos staged..."
+
+FOUND=0
+
+# Padrões de tokens conhecidos
+PATTERNS=(
+    "ghp_[A-Za-z0-9]{36}"                            # GitHub PAT clássico
+    "github_pat_[A-Za-z0-9_]{82}"                     # GitHub PAT novo formato
+    "gho_[A-Za-z0-9]{36}"                             # GitHub OAuth token
+    "AKIA[0-9A-Z]{16}"                                # AWS Access Key ID
+    "sk_live_[A-Za-z0-9]{24}"                         # Stripe Secret Key live
+    "sk_test_[A-Za-z0-9]{24}"                         # Stripe Secret Key test
+    "SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}"       # SendGrid API Key
+    "mongodb\+srv://[^:]+:[^@]+@"                     # MongoDB Atlas connection string com senha
+    "password\s*=\s*['\"][^'\"]{6,}"                  # Senhas hardcoded genéricas
+    "secret\s*=\s*['\"][^'\"]{8,}"                    # Secrets hardcoded genéricos
+    "api.?key\s*=\s*['\"][^'\"]{10,}"                 # API Keys genéricas
+    "private.?key\s*=\s*['\"][^'\"]{10,}"             # Private keys genéricas
+)
+
+# Nomes de arquivos que nunca devem ser commitados
+BLOCKED_FILES=(
+    "\.env$"
+    "\.env\.local$"
+    "\.env\.production$"
+    "id_rsa$"
+    "id_ed25519$"
+    "\.pem$"
+    "\.p12$"
+    "\.pfx$"
+    "secrets\.json$"
+    "credentials\.json$"
+)
+
+# Verifica arquivos staged
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1. Checar nomes de arquivos bloqueados
+for file in $STAGED_FILES; do
+    for pattern in "${BLOCKED_FILES[@]}"; do
+        if echo "$file" | grep -qE "$pattern"; then
+            echo ""
+            printf "${RED}❌ BLOQUEADO: Arquivo sensível detectado no staging:${NC}\n"
+            printf "   Arquivo:  ${YELLOW}$file${NC}\n"
+            printf "   Padrão:   $pattern\n"
+            FOUND=1
+        fi
+    done
+done
+
+# 2. Checar conteúdo dos arquivos staged
+for file in $STAGED_FILES; do
+    # Pular arquivos binários e o próprio exemplo do workshop
+    if echo "$file" | grep -qE "\.(png|jpg|gif|ico|woff|ttf|eot|pdf|zip)$"; then
+        continue
+    fi
+    if echo "$file" | grep -qE "integrations\.js$|\.env\.example$|pre-commit"; then
+        continue
+    fi
+
+    for pattern in "${PATTERNS[@]}"; do
+        match=$(git diff --cached -U0 "$file" | grep "^+" | grep -v "^+++" | grep -oE "$pattern" | head -1)
+        if [ -n "$match" ]; then
+            echo ""
+            printf "${RED}❌ BLOQUEADO: Dado sensível detectado em '$file':${NC}\n"
+            printf "   Padrão:  ${YELLOW}$pattern${NC}\n"
+            printf "   Trecho:  ${YELLOW}${match:0:20}...${NC}\n"
+            FOUND=1
+        fi
+    done
+done
+
+if [ "$FOUND" -eq 1 ]; then
+    echo ""
+    printf "${RED}═══════════════════════════════════════════════════════${NC}\n"
+    printf "${RED}  COMMIT BLOQUEADO — Dados sensíveis encontrados!${NC}\n"
+    printf "${RED}═══════════════════════════════════════════════════════${NC}\n"
+    echo ""
+    printf "${YELLOW}💡 O que fazer:${NC}\n"
+    echo "  1. Remova as credenciais do código"
+    echo "  2. Mova para variáveis de ambiente no arquivo .env"
+    echo "  3. Garanta que .env está no .gitignore"
+    echo "  4. Use process.env.NOME_DA_VARIAVEL no código"
+    echo ""
+    exit 1
+fi
+
+printf "${GREEN}✅ Nenhum dado sensível detectado. Commit liberado.${NC}\n"
+exit 0
